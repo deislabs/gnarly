@@ -1,3 +1,3 @@
 #!/bin/sh
 
-jq -r ".[\"${1}\"]" mod.json
+jq -re ".[\"${1}\"] | select(.!=null)" mod.json || true
