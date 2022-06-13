@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/containerd/containerd/remotes"
@@ -25,7 +26,10 @@ func main() {
 	buildArgs := &argFlag{}
 	flag.Var(buildArgs, "build-arg", "set build args to pass through -- these are required if the dockerfie uses args to determine an image source")
 	modProg := flag.String("mod-prog", os.Getenv("DOCKERFILE_MOD_PROG"), "Set program to execute to modify a reference as a replace rule")
+	modConfigFl := flag.String("mod-config", os.Getenv("DOCKERFILE_MOD_CONFIG"), "Set the config file to pass to mod prog")
 	flag.Parse()
+
+	modConfig := *modConfigFl
 
 	var dt []byte
 	var err error
@@ -73,24 +77,70 @@ func main() {
 
 	buf := bytes.NewBuffer(nil)
 	stderr := bytes.NewBuffer(nil)
+	prog := *modProg
+
+	type matchRule struct {
+		Match   string `json:"match"`
+		Replace string `json:"replace"`
+		regex   *regexp.Regexp
+	}
+
+	var matchers []matchRule
+	if prog == "" {
+
+		data, err := os.ReadFile(modConfig)
+		if err != nil && !os.IsNotExist(err) {
+			panic(err)
+		}
+		if len(data) > 0 {
+			if err := json.Unmarshal(data, &matchers); err != nil {
+				panic(err)
+			}
+			for i, v := range matchers {
+				matchers[i].regex = regexp.MustCompile(v.Match)
+			}
+		}
+	}
+
+	replace := func(ref string) string {
+		if prog == "" {
+			for _, rule := range matchers {
+				if !rule.regex.MatchString(ref) {
+					continue
+				}
+				return rule.regex.ReplaceAllString(ref, rule.Replace)
+			}
+			return ""
+		}
+
+		buf.Reset()
+		stderr.Reset()
+		cmdWithArgs := strings.Fields(*modProg)
+		cmdWithArgs = append(cmdWithArgs, ref)
+		cmd := exec.Command(cmdWithArgs[0], cmdWithArgs[1:]...)
+		cmd.Stdout = buf
+		cmd.Stderr = stderr
+		cmd.Env = []string{}
+		if modConfig != "" {
+			cmd.Env = append(cmd.Env, "MOD_CONFIG="+modConfig)
+		}
+		if err := cmd.Run(); err != nil {
+			if stderr.Len() == 0 {
+				stderr.WriteString("<no output from program>")
+			}
+			panic(fmt.Sprintf("%s: %v", stderr, err))
+		}
+
+		if stderr.Len() > 0 {
+			io.Copy(os.Stderr, stderr)
+		}
+
+		return strings.TrimSpace(buf.String())
+	}
+
 	for ref := range r.meta {
 		s := Source{Type: "docker-image", Ref: ref}
-		if *modProg != "" {
-			buf.Reset()
-			stderr.Reset()
-
-			cmd := exec.Command(*modProg, ref)
-			cmd.Stdout = buf
-			cmd.Stderr = stderr
-			if err := cmd.Run(); err != nil {
-				if stderr.Len() == 0 {
-					stderr.WriteString("<no output from program>")
-				}
-				panic(fmt.Sprintf("%s: %v", stderr, err))
-			}
-
-			s.Replace = strings.TrimSpace(buf.String())
-		}
+		s.Replace = replace(ref)
 		result.Sources = append(result.Sources, s)
 	}
 
