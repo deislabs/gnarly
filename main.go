@@ -185,7 +185,14 @@ type Result struct {
 func newResolver() *metaResolver {
 	cfg, err := dockercfg.LoadDefaultConfig()
 	if err != nil {
-		panic(err)
+		if !os.IsNotExist(err) {
+			panic(err)
+		}
+		return &metaResolver{r: docker.NewResolver(docker.ResolverOptions{
+			Hosts: docker.ConfigureDefaultRegistries(),
+		}),
+			meta: make(map[string]v1.Descriptor),
+		}
 	}
 	return &metaResolver{
 		r: docker.NewResolver(docker.ResolverOptions{
