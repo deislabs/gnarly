@@ -120,9 +120,8 @@ func main() {
 		cmd := exec.Command(cmdWithArgs[0], cmdWithArgs[1:]...)
 		cmd.Stdout = buf
 		cmd.Stderr = stderr
-		cmd.Env = []string{}
 		if modConfig != "" {
-			cmd.Env = append(cmd.Env, "MOD_CONFIG="+modConfig)
+			cmd.Env = append(os.Environ(), "MOD_CONFIG="+modConfig)
 		}
 		if err := cmd.Run(); err != nil {
 			if stderr.Len() == 0 {
