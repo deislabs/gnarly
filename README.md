@@ -7,8 +7,27 @@ It is based on a lot of in progress work and is only here as a placeholder.
 
 ### Example Usage
 
+This tool can output data in two formats:
+
+- `--format=build-flags` - Used to output flags directly to `docker buildx build`
+- `--format=modfile` - Experimental file which requires a custom syntax parser (`--build-arg BUILDKIT_SYNTAX="mcr.microsoft.com/oss/moby/dockerfile:modfile1"`). The file is passed along with the build context and repalcements are by the parser during build.
+
+The default format is `build-flags`.
+
 ```console
-$ ./dockersource --mod-prog=./mod.sh | tee Dockerfile.mod
+$ ./dockersource --mod-prog=./mod.sh
+--build-context docker.io/library/golang:1.18=docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.18 $
+```
+
+Only sources that have a replacement will be output.
+Notice it does not print a newline character so it can be passed directly to `docker buildx build`.
+
+When using this format, whatever `--build-args` you pass to this tool will also be part of the output so you don't have to specify build-args to both this tool and to `docker buildx build.
+
+For `--format=modfile`:
+
+```console
+$ ./dockersource --format=modfile --mod-prog=./mod.sh | tee Dockerfile.mod
 {
         "sources": [
                 {
@@ -47,7 +66,7 @@ In some cases you may not want to modify the main build context with a Dockerfil
 
 ```console
 $ dir="$(mktemp -d)" # Make a temp dir where we'll store the Dockerfile.mod
-$ ./dockersource --mod-prog=./mod.sh | tee "${dir}/Dockerfile.mod" # Generate the Dockerfile.mod and store it in the temp dir created above.
+$ ./dockersource --format=modfile --mod-prog=./mod.sh | tee "${dir}/Dockerfile.mod" # Generate the Dockerfile.mod and store it in the temp dir created above.
 {
         "sources": [
                 {

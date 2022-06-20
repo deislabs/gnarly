@@ -19,17 +19,28 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/opencontainers/go-digest"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+)
+
+const (
+	formatModfile    = "modfile"
+	formatBuildFlags = "build-flags"
 )
 
 func main() {
-	buildArgs := &argFlag{}
-	flag.Var(buildArgs, "build-arg", "set build args to pass through -- these are required if the dockerfie uses args to determine an image source")
-	modProg := flag.String("mod-prog", os.Getenv("DOCKERFILE_MOD_PROG"), "Set program to execute to modify a reference as a replace rule")
-	modConfigFl := flag.String("mod-config", os.Getenv("DOCKERFILE_MOD_CONFIG"), "Set the config file to pass to mod prog")
-	flag.Parse()
+	modProg := os.Getenv("DOCKERFILE_MOD_PROG")
+	modConfig := os.Getenv("DOCKERFILE_MOD_CONFIG")
+	buildArgs := argFlag{}
+	format := os.Getenv("DOCKERFILE_MOD_FORMAT")
+	if format == "" {
+		format = formatBuildFlags
+	}
 
-	modConfig := *modConfigFl
+	flag.Var(&buildArgs, "build-arg", "set build args to pass through -- these are required if the dockerfie uses args to determine an image source")
+	flag.StringVar(&modProg, "mod-prog", modProg, "Set program to execute to modify a reference as a replace rule")
+	flag.StringVar(&modConfig, "mod-config", modConfig, "Set the config file to pass to mod prog")
+	flag.StringVar(&format, "format", format, "Set the output format. Formats: modfile, build-flags")
+
+	flag.Parse()
 
 	var dt []byte
 	var err error
@@ -59,9 +70,8 @@ func main() {
 	for _, target := range targets.Targets {
 		_, err = dockerfile2llb.Dockefile2Outline(context.TODO(), dt, dockerfile2llb.ConvertOpt{
 			BuildArgs: func() map[string]string {
-				args := *buildArgs
-				if len(args) > 0 {
-					return args
+				if len(buildArgs) > 0 {
+					return buildArgs
 				}
 				return nil
 			}(),
@@ -77,7 +87,6 @@ func main() {
 
 	buf := bytes.NewBuffer(nil)
 	stderr := bytes.NewBuffer(nil)
-	prog := *modProg
 
 	type matchRule struct {
 		Match   string `json:"match"`
@@ -86,8 +95,7 @@ func main() {
 	}
 
 	var matchers []matchRule
-	if prog == "" {
-
+	if modProg == "" {
 		data, err := os.ReadFile(modConfig)
 		if err != nil && !os.IsNotExist(err) {
 			panic(err)
@@ -103,7 +111,7 @@ func main() {
 	}
 
 	replace := func(ref string) string {
-		if prog == "" {
+		if modProg == "" {
 			for _, rule := range matchers {
 				if !rule.regex.MatchString(ref) {
 					continue
@@ -115,7 +123,7 @@ func main() {
 
 		buf.Reset()
 		stderr.Reset()
-		cmdWithArgs := strings.Fields(*modProg)
+		cmdWithArgs := strings.Fields(modProg)
 		cmdWithArgs = append(cmdWithArgs, ref)
 		cmd := exec.Command(cmdWithArgs[0], cmdWithArgs[1:]...)
 		cmd.Stdout = buf
@@ -137,18 +145,37 @@ func main() {
 		return strings.TrimSpace(buf.String())
 	}
 
-	for ref := range r.meta {
-		s := Source{Type: "docker-image", Ref: ref}
-		s.Replace = replace(ref)
-		result.Sources = append(result.Sources, s)
+	switch format {
+	case formatModfile:
+		for _, resolved := range r.refs {
+			s := Source{Type: "docker-image", Ref: resolved}
+			s.Replace = replace(resolved)
+			result.Sources = append(result.Sources, s)
+		}
+
+		data, err := json.MarshalIndent(result, "", "\t")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(data))
+	case formatBuildFlags:
+		sb := &strings.Builder{}
+
+		for k, v := range buildArgs {
+			sb.WriteString(fmt.Sprintf("--build-arg %s=%s ", k, v))
+		}
+
+		for ref, resolved := range r.refs {
+			replaced := replace(resolved)
+			if replaced != "" {
+				sb.WriteString(fmt.Sprintf("--build-context %s=docker-image://%s ", ref, replaced))
+			}
+		}
+		fmt.Print(sb.String())
+	default:
+		panic(fmt.Sprintf("unknown format: %s", format))
 	}
 
-	data, err := json.MarshalIndent(result, "", "\t")
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(string(data))
 }
 
 type argFlag map[string]string
@@ -191,7 +218,7 @@ func newResolver() *metaResolver {
 		return &metaResolver{r: docker.NewResolver(docker.ResolverOptions{
 			Hosts: docker.ConfigureDefaultRegistries(),
 		}),
-			meta: make(map[string]v1.Descriptor),
+			refs: make(map[string]string),
 		}
 	}
 	return &metaResolver{
@@ -201,13 +228,13 @@ func newResolver() *metaResolver {
 					docker.WithAuthCreds(cfg.GetRegistryCredentials),
 				)),
 			)}),
-		meta: make(map[string]v1.Descriptor),
+		refs: make(map[string]string),
 	}
 }
 
 type metaResolver struct {
 	r    remotes.Resolver
-	meta map[string]v1.Descriptor
+	refs map[string]string
 }
 
 func (r *metaResolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
@@ -216,7 +243,7 @@ func (r *metaResolver) ResolveImageConfig(ctx context.Context, ref string, opt l
 		return "", nil, err
 	}
 
-	r.meta[ref] = desc
+	r.refs[ref] = name
 
 	f, err := r.r.Fetcher(ctx, name)
 	if err != nil {
