@@ -24,6 +24,30 @@ Notice it does not print a newline character so it can be passed directly to `do
 
 When using this format, whatever `--build-args` you pass to this tool will also be part of the output so you don't have to specify build-args to both this tool and to `docker buildx build.
 
+With `docker buildx build`:
+```console
+$ docker buildx build $(./dockersource --mod-prog=./mod.sh) .
+[+] Building 32.0s (12/12) FINISHED                                                                                                                                                                                         
+ => [internal] load build definition from Dockerfile                                                                                                                                                                   0.0s
+ => => transferring dockerfile: 496B                                                                                                                                                                                   0.0s
+ => [internal] load .dockerignore                                                                                                                                                                                      0.0s
+ => => transferring context: 2B                                                                                                                                                                                        0.0s
+ => [context golang:1.18] load metadata for mcr.microsoft.com/oss/go/microsoft/golang:1.18                                                                                                                             0.0s
+ => [context golang:1.18] mcr.microsoft.com/oss/go/microsoft/golang:1.18                                                                                                                                               0.0s
+ => => resolve mcr.microsoft.com/oss/go/microsoft/golang:1.18                                                                                                                                                          0.0s
+ => [internal] load build context                                                                                                                                                                                      0.0s
+ => => transferring context: 7.03kB                                                                                                                                                                                    0.0s
+ => CACHED [build 1/7] WORKDIR /go/src/github.com/cpuguy83/dockersource                                                                                                                                                0.0s
+ => CACHED [build 2/7] COPY go.mod .                                                                                                                                                                                   0.0s
+ => CACHED [build 3/7] COPY go.sum .                                                                                                                                                                                   0.0s
+ => CACHED [build 4/7] RUN     --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     go mod download                                                                           0.0s
+ => [build 5/7] COPY . .                                                                                                                                                                                               0.2s
+ => [build 6/7] RUN     --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 go build .                                                                        31.5s
+ => [stage-1 1/1] COPY --from=build /go/src/github.com/cpuguy83/dockersource/dockersource / 
+```
+
+
+
 For `--format=modfile`:
 
 ```console
