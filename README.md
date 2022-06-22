@@ -139,3 +139,24 @@ You can also specify a custom name for the named context, but you'll need to set
 ```console
 $ docker buildx build --build-arg BUILDKIT_SYNTAX=mcr.microsoft.com/oss/moby/dockerfile:modfile1 --build-context "my-custom-name=${dir}" --build-arg BUILDKIT_MOD_CONTEXT=my-custom-name .
 ```
+
+## One more thing
+
+This tool can also be used to wrap the `docker` cli.
+When in this mode the tool looks at the passed in arguments to see if it is an invocation of `docker build` or `docker buildx build`.
+If so it will auto-generate the replacements and inject the neccessary arguments and execute the real docker.
+
+This can be done in one of two ways:
+
+1. You can create a symlink (or just call the binary `docker`...) to the `dockersource` binary called `docker`. Any invocation where against this symlink will make it act as a docker wrapper., e.g. `ln -s ln -s ./dockersource docker`
+2. In lieu of symlinking or other such methods, you can set the environment variable `DOCKERFILE_MOD_INVOKE_DOCKER=1`, this has the same affect as 1.
+
+This can completely wrap docker (even `docker run`, `docker exec`, etc).
+This should work with 100% of use cases **except** since it is are trying to generate mod data for builds, remote build contexts (e.g. `docker buildx build <URL>`) are not currently supported.
+The workaround for this is to pre-generate your mod files and pass the path as an environment variable `DOCKERFILE_MOD_PATH=<path to Dockerfile.mod>`.
+This workaround is going to be the best way to make sure no builds fail because of some missing functionality in `dockersource`.
+
+One other thing it does is allow you to pass through a custom Dockerfile parser via the `BUILDKIT_SYNTAX` environment variable.
+This is neccessary when the Dockerfile (or the version of buildkit being used) is older and does not support [named build contexts](https://www.docker.com/blog/dockerfiles-now-support-multiple-build-contexts/), which are only supported from version 1.4 of the Dockerfile parser.
+
+In general this mode is only recommended when you do not have control over the build invocation and as such cannot inject your own build arguments.

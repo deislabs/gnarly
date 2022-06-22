@@ -1,6 +1,14 @@
 [
     {
-        "match": "docker.io/library/golang:(1.17|1.18|1.19)(.*)",
+        "match": "docker.io/library/golang:1\\.17(\\.[1-8])(-.*)",
+        "replace": "mcr.microsoft.com/oss/go/microsoft/golang:1.17${2}"
+    },
+    {
+        "match": "docker.io/library/golang:1\\.17(\\.\\d*)(.*)",
+        "replace": "mcr.microsoft.com/oss/go/microsoft/golang:1.17${1}${2}"
+    },
+    {
+        "match": "docker.io/library/golang:(1\\.17|1\\.18|1\\.19)(.*)",
         "replace": "mcr.microsoft.com/oss/go/microsoft/golang:${1}${2}"
     }
 ]
