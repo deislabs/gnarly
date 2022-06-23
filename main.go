@@ -13,12 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/containerd/containerd/remotes"
-	"github.com/containerd/containerd/remotes/docker"
-	"github.com/cpuguy83/dockercfg"
-	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
-	"github.com/opencontainers/go-digest"
 )
 
 const (
@@ -26,9 +21,17 @@ const (
 	formatBuildFlags = "build-flags"
 )
 
+var (
+	modProg   = os.Getenv("DOCKERFILE_MOD_PROG")
+	modConfig = os.Getenv("DOCKERFILE_MOD_CONFIG")
+)
+
 func main() {
-	modProg := os.Getenv("DOCKERFILE_MOD_PROG")
-	modConfig := os.Getenv("DOCKERFILE_MOD_CONFIG")
+	if IsDocker() {
+		InvokeDocker()
+		return
+	}
+
 	buildArgs := argFlag{}
 	format := os.Getenv("DOCKERFILE_MOD_FORMAT")
 	if format == "" {
@@ -42,8 +45,10 @@ func main() {
 
 	flag.Parse()
 
-	var dt []byte
-	var err error
+	var (
+		err error
+		dt  []byte
+	)
 	if flag.NArg() == 0 || flag.Arg(0) == "-" {
 		stat, e := os.Stdin.Stat()
 		if e != nil {
@@ -61,6 +66,34 @@ func main() {
 		panic(err)
 	}
 
+	result := Run(dt, buildArgs)
+
+	switch format {
+	case formatModfile:
+		data, err := json.MarshalIndent(result, "", "\t")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(data))
+	case formatBuildFlags:
+		sb := &strings.Builder{}
+
+		for k, v := range buildArgs {
+			sb.WriteString(fmt.Sprintf("--build-arg %s=%s ", k, v))
+		}
+
+		for _, resolved := range result.Sources {
+			if resolved.Replace != "" {
+				sb.WriteString(fmt.Sprintf("--build-context %s=docker-image://%s ", resolved.Ref, resolved.Replace))
+			}
+		}
+		fmt.Print(sb.String())
+	default:
+		panic(fmt.Sprintf("unknown format: %s", format))
+	}
+}
+
+func Run(dt []byte, buildArgs map[string]string) Result {
 	targets, err := dockerfile2llb.ListTargets(context.TODO(), dt)
 	if err != nil {
 		panic(err)
@@ -145,37 +178,11 @@ func main() {
 		return strings.TrimSpace(buf.String())
 	}
 
-	switch format {
-	case formatModfile:
-		for _, resolved := range r.refs {
-			s := Source{Type: "docker-image", Ref: resolved}
-			s.Replace = replace(resolved)
-			result.Sources = append(result.Sources, s)
-		}
-
-		data, err := json.MarshalIndent(result, "", "\t")
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(data))
-	case formatBuildFlags:
-		sb := &strings.Builder{}
-
-		for k, v := range buildArgs {
-			sb.WriteString(fmt.Sprintf("--build-arg %s=%s ", k, v))
-		}
-
-		for ref, resolved := range r.refs {
-			replaced := replace(resolved)
-			if replaced != "" {
-				sb.WriteString(fmt.Sprintf("--build-context %s=docker-image://%s ", ref, replaced))
-			}
-		}
-		fmt.Print(sb.String())
-	default:
-		panic(fmt.Sprintf("unknown format: %s", format))
+	for _, resolved := range r.refs {
+		s := Source{Type: "docker-image", Ref: resolved, Replace: replace(resolved)}
+		result.Sources = append(result.Sources, s)
 	}
-
+	return result
 }
 
 type argFlag map[string]string
@@ -207,61 +214,4 @@ type Source struct {
 
 type Result struct {
 	Sources []Source `json:"sources"`
-}
-
-func newResolver() *metaResolver {
-	cfg, err := dockercfg.LoadDefaultConfig()
-	if err != nil {
-		if !os.IsNotExist(err) {
-			panic(err)
-		}
-		return &metaResolver{r: docker.NewResolver(docker.ResolverOptions{
-			Hosts: docker.ConfigureDefaultRegistries(),
-		}),
-			refs: make(map[string]string),
-		}
-	}
-	return &metaResolver{
-		r: docker.NewResolver(docker.ResolverOptions{
-			Hosts: docker.ConfigureDefaultRegistries(
-				docker.WithAuthorizer(docker.NewDockerAuthorizer(
-					docker.WithAuthCreds(cfg.GetRegistryCredentials),
-				)),
-			)}),
-		refs: make(map[string]string),
-	}
-}
-
-type metaResolver struct {
-	r    remotes.Resolver
-	refs map[string]string
-}
-
-func (r *metaResolver) ResolveImageConfig(ctx context.Context, ref string, opt llb.ResolveImageConfigOpt) (digest.Digest, []byte, error) {
-	name, desc, err := r.r.Resolve(ctx, ref)
-	if err != nil {
-		return "", nil, err
-	}
-
-	r.refs[ref] = name
-
-	f, err := r.r.Fetcher(ctx, name)
-	if err != nil {
-		return "", nil, err
-	}
-
-	rdr, err := f.Fetch(ctx, desc)
-	if err != nil {
-		return "", nil, err
-	}
-	defer rdr.Close()
-
-	lr := io.LimitReader(rdr, desc.Size)
-
-	data, err := ioutil.ReadAll(lr)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return desc.Digest, data, nil
 }
