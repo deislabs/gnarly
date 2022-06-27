@@ -116,7 +116,7 @@ func parseDockerArgs(args []string) dockerArgs {
 				}
 			}
 
-			debug(arg, value)
+			debug(splitArg[0], value)
 			if dArgs.Build {
 				switch splitArg[0] {
 				case "--build-arg":
