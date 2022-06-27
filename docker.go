@@ -193,12 +193,10 @@ func invokeDocker(ctx context.Context) error {
 	}
 
 	var (
-		lastArg string
-		args    []string
+		args []string
 	)
 	if len(os.Args) > 1 {
-		lastArg = os.Args[len(os.Args)-1]
-		args = os.Args[1 : len(os.Args)-1]
+		args = os.Args[1:]
 	}
 
 	dArgs := parseDockerArgs(args)
@@ -260,8 +258,6 @@ func invokeDocker(ctx context.Context) error {
 	case <-ctx.Done():
 	default:
 	}
-
-	args = append(args, lastArg)
 
 	debug(d, strings.Join(args, " "))
 	if err := syscall.Exec(d, append([]string{filepath.Base(d)}, args...), os.Environ()); err != nil {
