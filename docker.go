@@ -73,6 +73,7 @@ type dockerArgs struct {
 	BuildArgs      map[string]string
 	DockerfileName string
 	Build          bool
+	BuildPos       int
 	Buildx         bool
 }
 
@@ -95,8 +96,12 @@ func parseDockerArgs(args []string) dockerArgs {
 		switch arg {
 		case "build":
 			dArgs.Build = true
+			dArgs.BuildPos = i
 		case "buildx":
-			dArgs.Buildx = true
+			// `buildx` must come before `build` to be considered
+			if !dArgs.Build {
+				dArgs.Buildx = true
+			}
 		}
 
 		if skipNext {
@@ -164,8 +169,18 @@ func invokeDocker(ctx context.Context) error {
 	dArgs := parseDockerArgs(args)
 
 	if dArgs.Build {
-		if dArgs.Build && !dArgs.Buildx && parser == "" {
-			return fmt.Errorf("legacy `docker build` invcoation detected, but no dockerfile parser was specified. Please set the `BUILDKIT_SYNTAX` environment variable to the name of the parser to use and add a Dockerfile.mod adjacent to the specified Dockerfile")
+		if dArgs.Build && !dArgs.Buildx {
+			out, err := exec.CommandContext(ctx, d, "build", "--help").CombinedOutput()
+			if err != nil {
+				debug("error while checking if `docker build` supports --build-context:", err)
+			}
+
+			// Newer versions of docker *may* support --build-context, but that depends on a number of factors... so just check if `docker build --help` says it supports it.
+			// If not then inject buildx into the args.
+			if !strings.Contains(string(out), "--build-context") {
+				debug("injecting buildx into args")
+				args = append(args[:dArgs.BuildPos], append([]string{"buildx"}, args[dArgs.BuildPos:]...)...)
+			}
 		}
 
 		if parser != "" {

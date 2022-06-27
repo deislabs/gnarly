@@ -1,4 +1,4 @@
-ARG GO_VERSION
+ARG GO_VERSION=1.18
 FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION} AS build
 WORKDIR /go/src/github.com/cpuguy83/dockersource
 COPY go.mod .
