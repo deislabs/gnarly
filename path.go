@@ -3,14 +3,31 @@ package main
 import (
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
 func lookPath(name string) string {
 	paths := filepath.SplitList(os.Getenv(pathEnv))
 
-	dir := filepath.Dir(os.Args[0])
-	debug("current bin:", os.Args[0])
+	execPath := os.Args[0]
+	if !filepath.IsAbs(execPath) {
+		if _, err := os.Stat(execPath); err != nil {
+			if !os.IsNotExist(err) {
+				debug("lookPath: stat error %s: %v", execPath, err)
+				return ""
+			}
+
+			execPath, err = exec.LookPath(execPath)
+			if err != nil {
+				debug("exec.LookPath error: %v", err)
+				return ""
+			}
+		}
+	}
+
+	dir := filepath.Dir(execPath)
+	debug("current bin:", execPath)
 	for _, p := range paths {
 		debug("checking for docker in path:", p)
 		if !noFilterPath && p == dir {
