@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -25,8 +26,13 @@ RUN echo hello
 }
 
 func TestParseDockerArgs(t *testing.T) {
+	dArgs := parseDockerArgs([]string{"run", "-it", "--rm", "busybox", "sh"})
+	if !reflect.DeepEqual(dArgs, newDoockerArgs()) {
+		t.Errorf("Got unexpected docker args, should be empty: %+v", dArgs)
+	}
+
 	osArgs := []string{"build", "--build-arg", "foo=bar", "--bool-flag", "--other-flag", "some value", "--build-arg=baz=quux", "--file", t.Name(), "."}
-	dArgs := parseDockerArgs(osArgs)
+	dArgs = parseDockerArgs(osArgs)
 
 	if !dArgs.Build {
 		t.Error("Expected `build` to be true")

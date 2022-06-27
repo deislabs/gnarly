@@ -1,19 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"regexp"
+	"os/signal"
 	"strings"
-
-	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
+	"syscall"
 )
 
 const (
@@ -63,10 +59,15 @@ func main() {
 		dt, err = ioutil.ReadFile(flag.Arg(0))
 	}
 	if err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, "error reading dockerfile:", err)
+		os.Exit(1)
 	}
 
-	result := Run(dt, buildArgs)
+	result, err := Generate(newContext(), dt, buildArgs)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error generating mods:", err)
+		os.Exit(2)
+	}
 
 	switch format {
 	case formatModfile:
@@ -75,6 +76,7 @@ func main() {
 			panic(err)
 		}
 		fmt.Println(string(data))
+		return
 	case formatBuildFlags:
 		sb := &strings.Builder{}
 
@@ -88,101 +90,11 @@ func main() {
 			}
 		}
 		fmt.Print(sb.String())
+		return
 	default:
-		panic(fmt.Sprintf("unknown format: %s", format))
+		fmt.Fprintln(os.Stderr, "unknown format:", format)
+		os.Exit(1)
 	}
-}
-
-func Run(dt []byte, buildArgs map[string]string) Result {
-	targets, err := dockerfile2llb.ListTargets(context.TODO(), dt)
-	if err != nil {
-		panic(err)
-	}
-
-	r := newResolver()
-	for _, target := range targets.Targets {
-		_, err = dockerfile2llb.Dockefile2Outline(context.TODO(), dt, dockerfile2llb.ConvertOpt{
-			BuildArgs: func() map[string]string {
-				if len(buildArgs) > 0 {
-					return buildArgs
-				}
-				return nil
-			}(),
-			Target:       target.Name,
-			MetaResolver: r,
-		})
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	var result Result
-
-	buf := bytes.NewBuffer(nil)
-	stderr := bytes.NewBuffer(nil)
-
-	type matchRule struct {
-		Match   string `json:"match"`
-		Replace string `json:"replace"`
-		regex   *regexp.Regexp
-	}
-
-	var matchers []matchRule
-	if modProg == "" {
-		data, err := os.ReadFile(modConfig)
-		if err != nil && !os.IsNotExist(err) {
-			panic(err)
-		}
-		if len(data) > 0 {
-			if err := json.Unmarshal(data, &matchers); err != nil {
-				panic(err)
-			}
-			for i, v := range matchers {
-				matchers[i].regex = regexp.MustCompile(v.Match)
-			}
-		}
-	}
-
-	replace := func(ref string) string {
-		if modProg == "" {
-			for _, rule := range matchers {
-				if !rule.regex.MatchString(ref) {
-					continue
-				}
-				return rule.regex.ReplaceAllString(ref, rule.Replace)
-			}
-			return ""
-		}
-
-		buf.Reset()
-		stderr.Reset()
-		cmdWithArgs := strings.Fields(modProg)
-		cmdWithArgs = append(cmdWithArgs, ref)
-		cmd := exec.Command(cmdWithArgs[0], cmdWithArgs[1:]...)
-		cmd.Stdout = buf
-		cmd.Stderr = stderr
-		if modConfig != "" {
-			cmd.Env = append(os.Environ(), "MOD_CONFIG="+modConfig)
-		}
-		if err := cmd.Run(); err != nil {
-			if stderr.Len() == 0 {
-				stderr.WriteString("<no output from program>")
-			}
-			panic(fmt.Sprintf("%s: %v", stderr, err))
-		}
-
-		if stderr.Len() > 0 {
-			io.Copy(os.Stderr, stderr)
-		}
-
-		return strings.TrimSpace(buf.String())
-	}
-
-	for _, resolved := range r.refs {
-		s := Source{Type: "docker-image", Ref: resolved, Replace: replace(resolved)}
-		result.Sources = append(result.Sources, s)
-	}
-	return result
 }
 
 type argFlag map[string]string
@@ -206,12 +118,14 @@ func (f *argFlag) String() string {
 	return strings.Join(vals, " ")
 }
 
-type Source struct {
-	Type    string `json:"type"`
-	Ref     string `json:"ref"`
-	Replace string `json:"replace,omitempty"`
-}
+func newContext() context.Context {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 
-type Result struct {
-	Sources []Source `json:"sources"`
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ch
+		cancel()
+	}()
+	return ctx
 }

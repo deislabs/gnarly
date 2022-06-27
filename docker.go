@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -52,7 +53,7 @@ func IsDocker() bool {
 }
 
 func InvokeDocker() {
-	if err := invokeDocker(); err != nil {
+	if err := invokeDocker(newContext()); err != nil {
 		fmt.Fprintln(os.Stderr, "[dockersource]: Error while wrapping docker cli:", err)
 		fmt.Fprintln(os.Stderr, "[dockersource]: The oepration you are trying to perform may not be supported by this version of dockersource.")
 		os.Exit(1)
@@ -72,15 +73,19 @@ type dockerArgs struct {
 	Buildx         bool
 }
 
+func newDoockerArgs() dockerArgs {
+	return dockerArgs{
+		BuildArgs:      make(map[string]string),
+		DockerfileName: "Dockerfile",
+	}
+}
+
 // Expects all args that would be passed to dodcker except argv[0] itself.
 // e.g. if argv is "docker build -t foo -f bar", the args would be "build -t foo -f bar"
 func parseDockerArgs(args []string) dockerArgs {
 	var (
 		skipNext bool
-		dArgs    = dockerArgs{
-			BuildArgs:      make(map[string]string),
-			DockerfileName: "Dockerfile",
-		}
+		dArgs    = newDoockerArgs()
 	)
 
 	for i, arg := range args {
@@ -138,7 +143,7 @@ func parseDockerArgs(args []string) dockerArgs {
 	return dArgs
 }
 
-func invokeDocker() error {
+func invokeDocker(ctx context.Context) error {
 	d := lookPath(dockerBin)
 	if d == "" {
 		return &exec.Error{Name: dockerBin, Err: exec.ErrNotFound}
@@ -181,7 +186,10 @@ func invokeDocker() error {
 					return err
 				}
 
-				result = Run(dt, dArgs.BuildArgs)
+				result, err = Generate(ctx, dt, dArgs.BuildArgs)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -190,6 +198,11 @@ func invokeDocker() error {
 				args = append(args, fmt.Sprintf("--build-context=%s=%s://%s", s.Ref, s.Type, s.Replace))
 			}
 		}
+	}
+
+	select {
+	case <-ctx.Done():
+	default:
 	}
 
 	args = append(args, lastArg)
@@ -343,6 +356,4 @@ func dockerfileFromReader(f io.Reader, p string) ([]byte, error) {
 
 		return ioutil.ReadAll(tr)
 	}
-
-	return nil, fmt.Errorf("%w: %s not found in archive ", os.ErrNotExist, p)
 }
