@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -53,7 +54,9 @@ func IsDocker() bool {
 }
 
 func InvokeDocker() {
-	if err := invokeDocker(newContext()); err != nil {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if err := invokeDocker(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "[dockersource]: Error while wrapping docker cli:", err)
 		fmt.Fprintln(os.Stderr, "[dockersource]: The oepration you are trying to perform may not be supported by this version of dockersource.")
 		os.Exit(1)

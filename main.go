@@ -63,7 +63,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	result, err := Generate(newContext(), dt, buildArgs)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	result, err := Generate(ctx, dt, buildArgs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error generating mods:", err)
 		os.Exit(2)
@@ -116,16 +119,4 @@ func (f *argFlag) String() string {
 		vals = append(vals, k+"="+v)
 	}
 	return strings.Join(vals, " ")
-}
-
-func newContext() context.Context {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-ch
-		cancel()
-	}()
-	return ctx
 }
