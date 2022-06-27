@@ -186,7 +186,7 @@ func invokeDocker(ctx context.Context) error {
 		if dArgs.Build && !dArgs.Buildx {
 			out, err := exec.CommandContext(ctx, d, "build", "--help").CombinedOutput()
 			if err != nil {
-				debug("error while checking if `docker build` supports --build-context:", err)
+				debug("error while checking if `docker build` supports --build-context:", err, ":", string(out))
 			}
 
 			// Newer versions of docker *may* support --build-context, but that depends on a number of factors... so just check if `docker build --help` says it supports it.
