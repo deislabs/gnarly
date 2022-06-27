@@ -41,6 +41,17 @@ var (
 var (
 	// When IsDocker is true because of the special env var instead of based on argv[0], we don't want to filter the path.
 	noFilterPath bool
+
+	knownBoolFlags = map[string]bool{
+		"--load":      true,
+		"--no-cache":  true,
+		"--pull":      true,
+		"--push":      true,
+		"-q":          true,
+		"--quiet":     true,
+		"--tls":       true,
+		"--tlsverify": true,
+	}
 )
 
 func IsDocker() bool {
@@ -76,13 +87,57 @@ type dockerArgs struct {
 	Build          bool
 	BuildPos       int
 	Buildx         bool
+	Context        string
 }
 
-func newDoockerArgs() dockerArgs {
+func newDockerArgs() dockerArgs {
 	return dockerArgs{
 		BuildArgs:      make(map[string]string),
 		DockerfileName: "Dockerfile",
 	}
+}
+
+// Returns true if next is consumed here and should be skipped when itterating args
+func handleDockerFlag(arg, next string, dArgs *dockerArgs) bool {
+	splitArg := strings.SplitN(arg, "=", 2)
+	hasValue := len(splitArg) == 2
+	var value string
+	if hasValue {
+		value = splitArg[1]
+	} else {
+		value = next
+	}
+
+	debug(splitArg[0], value)
+	if dArgs.Build {
+		switch splitArg[0] {
+		case "--build-arg":
+			split := strings.SplitN(value, "=", 2)
+			var v string
+			if len(split) == 2 {
+				v = split[1]
+			}
+			debug("setting build arg", split[0], v)
+			dArgs.BuildArgs[split[0]] = v
+		case "-f", "--file":
+			dArgs.DockerfileName = value
+		}
+	}
+
+	if !hasValue && value != "" {
+		if knownBoolFlags[splitArg[0]] {
+			// We have a known bool flag, check if the next arg is a value passed to the bool flag
+			if isBoolV, _ := strconv.ParseBool(value); isBoolV {
+				return true
+			}
+		}
+		if len(value) > 0 && value[0] != '-' {
+			// This is a value for the current option, which we've already captured, so skip it.
+			return true
+		}
+	}
+
+	return false
 }
 
 // Expects all args that would be passed to dodcker except argv[0] itself.
@@ -90,7 +145,7 @@ func newDoockerArgs() dockerArgs {
 func parseDockerArgs(args []string) dockerArgs {
 	var (
 		skipNext bool
-		dArgs    = newDoockerArgs()
+		dArgs    = newDockerArgs()
 	)
 
 	for i, arg := range args {
@@ -102,63 +157,29 @@ func parseDockerArgs(args []string) dockerArgs {
 		case "build":
 			dArgs.Build = true
 			dArgs.BuildPos = i
+			continue
 		case "buildx":
 			// `buildx` must come before `build` to be considered
 			if !dArgs.Build {
 				dArgs.Buildx = true
 			}
+			continue
 		}
 
 		if arg[0] == '-' {
-			splitArg := strings.SplitN(arg, "=", 2)
-			hasValue := len(splitArg) == 2
-			var value string
-			if hasValue {
-				value = splitArg[1]
-			} else {
-				if i < len(args)-1 {
-					value = args[i+1]
-				}
+			var next string
+			if i < len(args)-1 {
+				next = args[i+1]
 			}
+			skipNext = handleDockerFlag(arg, next, &dArgs)
+			continue
+		}
 
-			debug(splitArg[0], value)
-			if dArgs.Build {
-				switch splitArg[0] {
-				case "--build-arg":
-					split := strings.SplitN(value, "=", 2)
-					var v string
-					if len(split) == 2 {
-						v = split[1]
-					}
-					debug("setting build arg", split[0], v)
-					dArgs.BuildArgs[split[0]] = v
-				case "-f", "--file":
-					dArgs.DockerfileName = value
-				}
+		if dArgs.Build {
+			if dArgs.Context != "" {
+				panic("[dockersource]: found multiple contexts -- this is a bug in the argument parser")
 			}
-
-			if !hasValue {
-				var isBool bool
-				switch splitArg[0] {
-				// Known bool flags which would mess up parsing here
-				case "--tls", "--tlsverify":
-					isBool = true
-				}
-				if len(args)-1 > i+1 {
-					a := args[i+1]
-					if isBool {
-						// We have a known bool flag, check if the next arg is a value passed to the bool flag
-						if isBoolV, err := strconv.ParseBool(a); err == nil && isBoolV {
-							skipNext = true
-							continue
-						}
-					}
-					if len(a) > 0 && a[0] != '-' {
-						// This is a value for the current option, which we've already captured, so skip it.
-						skipNext = true
-					}
-				}
-			}
+			dArgs.Context = arg
 		}
 	}
 
@@ -183,6 +204,9 @@ func invokeDocker(ctx context.Context) error {
 	dArgs := parseDockerArgs(args)
 
 	if dArgs.Build {
+		if dArgs.Context == "" {
+			return fmt.Errorf("could not find context for build in command line arguments")
+		}
 		if dArgs.Build && !dArgs.Buildx {
 			out, err := exec.CommandContext(ctx, d, "build", "--help").CombinedOutput()
 			if err != nil {
@@ -213,7 +237,7 @@ func invokeDocker(ctx context.Context) error {
 			}
 		} else {
 			if dArgs.Buildx {
-				dt, err := getDockerfile(lastArg, dArgs.DockerfileName)
+				dt, err := getDockerfile(dArgs.Context, dArgs.DockerfileName)
 				if err != nil {
 					return err
 				}

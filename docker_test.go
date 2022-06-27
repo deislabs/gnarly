@@ -27,7 +27,7 @@ RUN echo hello
 
 func TestParseDockerArgs(t *testing.T) {
 	dArgs := parseDockerArgs([]string{"run", "-it", "--rm", "busybox", "sh"})
-	if !reflect.DeepEqual(dArgs, newDoockerArgs()) {
+	if !reflect.DeepEqual(dArgs, newDockerArgs()) {
 		t.Errorf("Got unexpected docker args, should be empty: %+v", dArgs)
 	}
 
@@ -47,6 +47,14 @@ func TestParseDockerArgs(t *testing.T) {
 	dArgs = parseDockerArgs([]string{"run", "-it", "--rm", "buildx", "sh"})
 	if dArgs.Buildx {
 		t.Errorf("Got unexpected docker args, should not be build: %+v", dArgs)
+	}
+
+	dArgs = parseDockerArgs([]string{"build", ".", "-t", "test", "-f", "Dockerfile.test"})
+	if dArgs.Context != "." {
+		t.Errorf("Got unexpected context path, expected ., got: %s", dArgs.Context)
+	}
+	if dArgs.DockerfileName != "Dockerfile.test" {
+		t.Errorf("Got unexpected dockerfile name, expected Dockerfile.test, got: %s", dArgs.DockerfileName)
 	}
 
 	osArgs := []string{"build", "--build-arg", "foo=bar", "--bool-flag", "--other-flag", "some value", "--build-arg=baz=quux", "--file", t.Name(), "."}
