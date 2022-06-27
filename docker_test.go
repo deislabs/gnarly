@@ -31,6 +31,24 @@ func TestParseDockerArgs(t *testing.T) {
 		t.Errorf("Got unexpected docker args, should be empty: %+v", dArgs)
 	}
 
+	dArgs = parseDockerArgs([]string{"run", "-it", "--rm", "--name", "build", "busybox", "sh"})
+	if dArgs.Build {
+		t.Errorf("Got unexpected docker args, should not be build: %+v", dArgs)
+	}
+	dArgs = parseDockerArgs([]string{"run", "-it", "--rm", "build", "sh"})
+	if dArgs.Build {
+		t.Errorf("Got unexpected docker args, should not be build: %+v", dArgs)
+	}
+	dArgs = parseDockerArgs([]string{"--tls", "run", "-it", "--rm", "build", "sh"})
+	if dArgs.Build {
+		t.Errorf("Got unexpected docker args, should not be build: %+v", dArgs)
+	}
+
+	dArgs = parseDockerArgs([]string{"run", "-it", "--rm", "buildx", "sh"})
+	if dArgs.Buildx {
+		t.Errorf("Got unexpected docker args, should not be build: %+v", dArgs)
+	}
+
 	osArgs := []string{"build", "--build-arg", "foo=bar", "--bool-flag", "--other-flag", "some value", "--build-arg=baz=quux", "--file", t.Name(), "."}
 	dArgs = parseDockerArgs(osArgs)
 

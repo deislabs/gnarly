@@ -160,7 +160,14 @@ This should work with 100% of use cases **except** since it is are trying to gen
 The workaround for this is to pre-generate your mod files and pass the path as an environment variable `DOCKERFILE_MOD_PATH=<path to Dockerfile.mod>`.
 This workaround is going to be the best way to make sure no builds fail because of some missing functionality in `dockersource`.
 
+This will also inject `buildx` into a build invocation if `docker build` does not support the `--build-context` flag.
+Example: `docker build .` will be changed to `docker buildx build .`.
+The `buildx` subcommand is injected immediately before the `build` argument, so it should account for any flags before it.
+
 One other thing it does is allow you to pass through a custom Dockerfile parser via the `BUILDKIT_SYNTAX` environment variable.
 This is neccessary when the Dockerfile (or the version of buildkit being used) is older and does not support [named build contexts](https://www.docker.com/blog/dockerfiles-now-support-multiple-build-contexts/), which are only supported from version 1.4 of the Dockerfile parser.
 
 In general this mode is only recommended when you do not have control over the build invocation and as such cannot inject your own build arguments.
+
+There may be some failures with the command line parsing, particularly around how boolean flags are handled. There are some special case handlers for these, but there may be more.
+Probably most people would not run into these issues.

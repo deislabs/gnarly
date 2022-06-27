@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -93,6 +94,10 @@ func parseDockerArgs(args []string) dockerArgs {
 	)
 
 	for i, arg := range args {
+		if skipNext {
+			skipNext = false
+			continue
+		}
 		switch arg {
 		case "build":
 			dArgs.Build = true
@@ -102,11 +107,6 @@ func parseDockerArgs(args []string) dockerArgs {
 			if !dArgs.Build {
 				dArgs.Buildx = true
 			}
-		}
-
-		if skipNext {
-			skipNext = false
-			continue
 		}
 
 		if arg[0] == '-' {
@@ -137,14 +137,28 @@ func parseDockerArgs(args []string) dockerArgs {
 				}
 			}
 
-			if !hasValue && len(args)-1 > i+1 {
-				a := args[i+1]
-				if len(a) > 0 && a[0] != '-' {
-					// This is a value for the current option, which we've already captured, so skip it.
-					skipNext = true
+			if !hasValue {
+				var isBool bool
+				switch splitArg[0] {
+				// Known bool flags which would mess up parsing here
+				case "--tls", "--tlsverify":
+					isBool = true
+				}
+				if len(args)-1 > i+1 {
+					a := args[i+1]
+					if isBool {
+						// We have a known bool flag, check if the next arg is a value passed to the bool flag
+						if isBoolV, err := strconv.ParseBool(a); err == nil && isBoolV {
+							skipNext = true
+							continue
+						}
+					}
+					if len(a) > 0 && a[0] != '-' {
+						// This is a value for the current option, which we've already captured, so skip it.
+						skipNext = true
+					}
 				}
 			}
-			continue
 		}
 	}
 
