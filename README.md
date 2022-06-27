@@ -4,6 +4,10 @@ It can also optionally run another program to add a "replace" directive to test 
 
 This tool only generates metadata that can be fed into other tools.
 It is based on a lot of in progress work and is only here as a placeholder.
+Some things are being linked to as a library instead of used as intended (buildkit API calls) because the functionaility is not available in any released buildkit/dockerfile parser yet.
+
+There are absolutely no stability guarentees between releases at this time.
+A command that worked one way before may behave differently or even not even exist in the next release.
 
 ### Example Usage
 
