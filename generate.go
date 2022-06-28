@@ -59,9 +59,9 @@ func Generate(ctx context.Context, dt []byte, buildArgs map[string]string) (Resu
 	}
 
 	var matchers []matchRule
-	if modProg == "" {
+	if modProg == "" && modConfig != "" {
 		data, err := os.ReadFile(modConfig)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil {
 			return Result{}, fmt.Errorf("error reading mod config: %w", err)
 		}
 		if len(data) > 0 {
@@ -114,6 +114,7 @@ func Generate(ctx context.Context, dt []byte, buildArgs map[string]string) (Resu
 
 	for _, resolved := range r.refs {
 		s := Source{Type: "docker-image", Ref: resolved, Replace: replace(resolved)}
+		debug("resolved", s.Ref, "with replacement:", s.Replace)
 		result.Sources = append(result.Sources, s)
 	}
 	return result, nil
