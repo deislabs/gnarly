@@ -3,14 +3,13 @@ module github.com/cpuguy83/dockersource
 go 1.18
 
 require (
-	github.com/containerd/containerd v1.6.3
-	github.com/cpuguy83/dockercfg v0.3.1
 	github.com/moby/buildkit v0.10.1-0.20220402051847-3e38a2d34830
 	github.com/opencontainers/go-digest v1.0.0
 )
 
 require (
 	github.com/agext/levenshtein v1.2.3 // indirect
+	github.com/containerd/containerd v1.6.3 // indirect
 	github.com/containerd/ttrpc v1.1.0 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
