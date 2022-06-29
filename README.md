@@ -30,7 +30,7 @@ When using this format, whatever `--build-args` you pass to this tool will also 
 
 With `docker buildx build`:
 ```console
-$ docker buildx build $(./dockersource --mod-prog=./mod.sh --mod-config=contrib/lookup.json) .
+$ docker buildx build $(./dockersource --mod-prog=contrib/mod.sh --mod-config=contrib/lookup.json) .
 [+] Building 32.0s (12/12) FINISHED                                                                                                                                                                                         
  => [internal] load build definition from Dockerfile                                                                                                                                                                   0.0s
  => => transferring dockerfile: 496B                                                                                                                                                                                   0.0s
@@ -55,7 +55,7 @@ $ docker buildx build $(./dockersource --mod-prog=./mod.sh --mod-config=contrib/
 For `--format=modfile`:
 
 ```console
-$ ./dockersource --format=modfile --mod-prog=./mod.sh --mod-config=contrib/lookup.json| tee Dockerfile.mod
+$ ./dockersource --format=modfile --mod-prog=contrib/mod.sh --mod-config=contrib/lookup.json | tee Dockerfile.mod
 {
         "sources": [
                 {
@@ -68,9 +68,9 @@ $ ./dockersource --format=modfile --mod-prog=./mod.sh --mod-config=contrib/looku
 $ docker buildx build --build-arg BUILDKIT_SYNTAX=mcr.microsoft.com/oss/moby/dockerfile:modfile1 .
 ```
 
-Here we've told `dockersource` to use `mod.sh` as a tool to handle replacements.
-The `mod.sh` script uses `lookup.json` as a lookup table for replacements.
-For each ref that is found in the Dockerfile by `dockersource`, the `mod.sh` is called with the found ref as the first argument. The `mod.sh` script can return an empty string or a replacement ref.
+Here we've told `dockersource` to use `contrib/mod.sh` as a tool to handle replacements.
+The `contrib/mod.sh` script uses `contrib/lookup.json` as a lookup table for replacements.
+For each ref that is found in the Dockerfile by `dockersource`, the `contrib/mod.sh` is called with the found ref as the first argument. The `contrib/mod.sh` script can return an empty string or a replacement ref.
 You can specify a path to a config file to use, which will be passed along to the mod-prog as an environment variable `MOD_CONFIG`.
 
 The output of this is saved to `Dockerfile.mod` which is a special file that the syntax parser shown above will parse to handle replacements.
