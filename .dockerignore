@@ -1,0 +1,6 @@
+.dockerignore
+.gitignore
+.git
+test/bats/*
+test/test_helper/*
+Dockerfile
