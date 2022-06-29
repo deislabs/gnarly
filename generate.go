@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
@@ -117,5 +118,11 @@ func Generate(ctx context.Context, dt []byte, buildArgs map[string]string) (Resu
 		debug("resolved", s.Ref, "with replacement:", s.Replace)
 		result.Sources = append(result.Sources, s)
 	}
+
+	// Sort for stable output for testing
+	sort.Slice(result.Sources, func(i, j int) bool {
+		return result.Sources[i].Ref < result.Sources[j].Ref
+	})
+
 	return result, nil
 }

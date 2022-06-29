@@ -19,7 +19,7 @@ This tool can output data in two formats:
 The default format is `build-flags`.
 
 ```console
-$ ./dockersource --mod-prog=./mod.sh
+$ ./dockersource --mod-prog=contrib/mod.sh --mod-config=contrib/lookup.json
 --build-context docker.io/library/golang:1.18=docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.18 $
 ```
 
@@ -30,7 +30,7 @@ When using this format, whatever `--build-args` you pass to this tool will also 
 
 With `docker buildx build`:
 ```console
-$ docker buildx build $(./dockersource --mod-prog=./mod.sh) .
+$ docker buildx build $(./dockersource --mod-prog=./mod.sh --mod-config=contrib/lookup.json) .
 [+] Building 32.0s (12/12) FINISHED                                                                                                                                                                                         
  => [internal] load build definition from Dockerfile                                                                                                                                                                   0.0s
  => => transferring dockerfile: 496B                                                                                                                                                                                   0.0s
@@ -55,7 +55,7 @@ $ docker buildx build $(./dockersource --mod-prog=./mod.sh) .
 For `--format=modfile`:
 
 ```console
-$ ./dockersource --format=modfile --mod-prog=./mod.sh | tee Dockerfile.mod
+$ ./dockersource --format=modfile --mod-prog=./mod.sh --mod-config=contrib/lookup.json| tee Dockerfile.mod
 {
         "sources": [
                 {
@@ -87,14 +87,14 @@ The first match is used for each ref.
 
 The `match` field can be a regex, and the `replace` value can make use of capture groups from the regex.
 See [regexp.ReplaceAllString](https://pkg.go.dev/regexp#Regexp.ReplaceAllString) for more details.
-As an example, see `mod-builtin.json`.
+As an example, see `contrib/mod-builtin.json`.
 
 In some cases you may not want to modify the main build context with a Dockerfile.mod, which could dirty the git tree or potentially interfere with the actual build. For this case you can use a special "named" context with the mod file in it.
 
 
 ```console
 $ dir="$(mktemp -d)" # Make a temp dir where we'll store the Dockerfile.mod
-$ ./dockersource --format=modfile --mod-prog=./mod.sh | tee "${dir}/Dockerfile.mod" # Generate the Dockerfile.mod and store it in the temp dir created above.
+$ ./dockersource --format=modfile --mod-prog=contrib/mod.sh --mod-config=contrib/lookup.json | tee "${dir}/Dockerfile.mod" # Generate the Dockerfile.mod and store it in the temp dir created above.
 {
         "sources": [
                 {

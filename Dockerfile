@@ -16,7 +16,5 @@ RUN \
     --mount=type=cache,target=/root/.cache/go-build,id=go-build-cache-${TARGETPLATFORM} \
     GOARM=${TARGETVARIANT#v} CGO_ENABLED=0 go build .
 
-FROM golang:1.17.8-buster AS test
-
 FROM scratch
 COPY --from=build /go/src/github.com/cpuguy83/dockersource/dockersource /
