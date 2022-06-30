@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -72,8 +74,28 @@ func withModConfig(config []byte) cmdOpt {
 	}
 }
 
+func withDockerEnv(t *testing.T, cmd *exec.Cmd) {
+	cmd.Env = append(cmd.Env, "DOCKERFILE_MOD_INVOKE_DOCKER=1")
+}
+
+var openOnce sync.Once
+
+// This is a hack to bust the go test cache automatically
+func bustCmdCache(t *testing.T) {
+	openOnce.Do(func() {
+		// Opening the root dir busts the cache any time anything changes
+		// We could probably scope this down to just non-test .go files, but we'd need to list them using `ls` or something, because `os.ReadDir` will open the dir anyway.
+		f, err := os.Open(filepath.Dir(getwd()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+	})
+}
+
 func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 	return func(t *testing.T) {
+		bustCmdCache(t)
 		cmd := exec.Command(dockersource)
 		for _, o := range opts {
 			o(t, cmd)

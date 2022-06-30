@@ -3,15 +3,18 @@ package test
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
-var dockersource = filepath.Join(getwd(), "../", "dockersource")
-
-const modProg = "modprog"
+const (
+	modProg      = "modprog"
+	docker       = "docker"
+	dockersource = "dockersource"
+)
 
 func TestMain(m *testing.M) {
 	if IsModProg() {
@@ -19,22 +22,32 @@ func TestMain(m *testing.M) {
 		return
 	}
 
-	cleanup := func() {}
-
-	if _, err := os.Stat(dockersource); os.IsNotExist(err) {
-		cmd := exec.Command("make", "dockersource")
-		cmd.Dir = filepath.Dir(dockersource)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "dockersource bin not found and got an error while compiling:", string(out))
-			os.Exit(1)
-		}
-		cleanup = func() {
-			if err := os.Remove(dockersource); err != nil {
-				fmt.Fprintln(os.Stderr, "error cleaning up test bin:", err)
-			}
+	dir, err := ioutil.TempDir("", "dockersource-test")
+	if err != nil {
+		panic(err)
+	}
+	cleanup := func() {
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintln(os.Stderr, "error cleaning up test bin:", err)
 		}
 	}
+
+	cmd := exec.Command("make", dockersource)
+	cmd.Dir = filepath.Dir(getwd())
+	cmd.Env = append(os.Environ(), "OUTPUT="+dir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error compiling dockersource bin:", string(out))
+		os.Exit(1)
+	}
+
+	p := filepath.Join(dir, dockersource)
+	if err := os.Symlink(p, filepath.Join(dir, docker)); err != nil {
+		fmt.Fprintln(os.Stderr, "error symlinking as docker:", err)
+		os.Exit(1)
+	}
+
+	os.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 
 	code := m.Run()
 	cleanup()

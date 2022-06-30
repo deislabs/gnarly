@@ -3,7 +3,7 @@ TEST ?= go test -count=$(TEST_COUNT) $(TEST_FLAGS) $(if $(V),-v,)
 
 .PHONY: dockersource
 dockersource:
-	CGO_ENABLED=0 go build
+	CGO_ENABLED=0 go build $(if $(OUTPUT),-o $(OUTPUT)/$(@),) .
 
 clean:
 	rm dockersource
