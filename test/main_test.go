@@ -10,10 +10,8 @@ import (
 	"testing"
 )
 
-const (
-	modProg      = "modprog"
-	docker       = "docker"
-	dockersource = "dockersource"
+var (
+	dockersourcePath string
 )
 
 func TestMain(m *testing.M) {
@@ -41,12 +39,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	p := filepath.Join(dir, dockersource)
-	if err := os.Symlink(p, filepath.Join(dir, docker)); err != nil {
-		fmt.Fprintln(os.Stderr, "error symlinking as docker:", err)
-		os.Exit(1)
-	}
-
+	dockersourcePath = filepath.Join(dir, dockersource)
 	os.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 
 	code := m.Run()
