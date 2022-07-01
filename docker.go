@@ -255,7 +255,7 @@ func invokeDocker(ctx context.Context) error {
 				return fmt.Errorf("error parsing specified modfile: %w", err)
 			}
 		} else {
-			if dArgs.Buildx {
+			if dArgs.Build {
 				dt, err := getDockerfile(dArgs.Context, dArgs.DockerfileName)
 				if err != nil {
 					return err
