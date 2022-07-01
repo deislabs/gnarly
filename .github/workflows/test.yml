@@ -1,6 +1,13 @@
 name: Test
 
 on:
+  workflow_dispatch:
+    inputs:
+      runFlakeyTests:
+        description: Run flakey tests
+        default: true
+        required: false
+        type: boolean
   push:
     branches: [ "main" ]
   pull_request:
@@ -19,6 +26,9 @@ jobs:
 
       - name: Build
         run: go build -v ./...
-
       - name: Test
         run: go test -v ./...
+        if: ${{ !inputs.runFlakeyTests }}
+      - name: Test
+        run: TEST_NO_SKIP_BUILD=1 go test -v ./...
+        if: ${{ inputs.runFlakeyTests }}
