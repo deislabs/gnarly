@@ -26,6 +26,10 @@ jobs:
 
       - name: Build
         run: go build -v ./...
+
+      - name: Create builder
+        run: docker buildx create --use && docker buildx inspect --bootstrap
+
       - name: Test
         run: go test -v ./...
         if: ${{ !inputs.runFlakeyTests }}
