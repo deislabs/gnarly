@@ -34,6 +34,9 @@ var (
 	// Set a path to a pre-existing modfile instead of calculating one on each invocation.
 	modPath = os.Getenv("DOCKERFILE_MOD_PATH")
 
+	// Set the path to store the metadata output from docker build
+	metaPath = os.Getenv("DOCKERFILE_MOD_META_PATH")
+
 	// Enable debug logging
 	dockerDebug = os.Getenv("DEBUG")
 )
@@ -88,6 +91,7 @@ type dockerArgs struct {
 	BuildPos       int
 	Buildx         bool
 	Context        string
+	MetaData       string
 }
 
 func newDockerArgs() dockerArgs {
@@ -121,6 +125,9 @@ func handleDockerFlag(arg, next string, dArgs *dockerArgs) bool {
 			dArgs.BuildArgs[split[0]] = v
 		case "-f", "--file":
 			dArgs.DockerfileName = value
+		case "--metadata-file":
+			debug("setting metadata file", arg, value)
+			dArgs.MetaData = value
 		}
 	}
 
@@ -201,6 +208,7 @@ func invokeDocker(ctx context.Context) error {
 
 	dArgs := parseDockerArgs(args)
 
+	var metaCopy bool
 	if dArgs.Build {
 		if dArgs.Context == "" {
 			return fmt.Errorf("could not find context for build in command line arguments")
@@ -217,6 +225,15 @@ func invokeDocker(ctx context.Context) error {
 				debug("injecting buildx into args")
 				args = append(args[:dArgs.BuildPos], append([]string{"buildx"}, args[dArgs.BuildPos:]...)...)
 			}
+		}
+
+		if metaPath != "" {
+			debug("injecting metadata file into args")
+			if dArgs.MetaData != "" && metaPath != dArgs.MetaData {
+				debug("build arguments already specified a metadata file, creating helper to copy it")
+				metaCopy = true
+			}
+			args = append(args, "--metadata-file", metaPath)
 		}
 
 		if parser != "" {
@@ -260,11 +277,39 @@ func invokeDocker(ctx context.Context) error {
 	}
 
 	debug(d, strings.Join(args, " "))
-	if err := syscall.Exec(d, append([]string{filepath.Base(d)}, args...), os.Environ()); err != nil {
+	if !metaCopy {
+		if err := syscall.Exec(d, append([]string{filepath.Base(d)}, args...), os.Environ()); err != nil {
+			return fmt.Errorf("error executing actual docker bin: %w", err)
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, d, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGTERM,
+	}
+
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error executing actual docker bin: %w", err)
 	}
 
-	return nil
+	f1, err := os.Open(metaPath)
+	if err != nil {
+		return fmt.Errorf("error opening metadata file: %w", err)
+	}
+	defer f1.Close()
+
+	f2, err := os.Create(dArgs.MetaData)
+	if err != nil {
+		return fmt.Errorf("error creating metadata file: %w", err)
+	}
+	defer f2.Close()
+
+	_, err = io.Copy(f2, f1)
+	return err
 }
 
 const (

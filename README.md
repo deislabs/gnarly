@@ -164,6 +164,9 @@ This will also inject `buildx` into a build invocation if `docker build` does no
 Example: `docker build .` will be changed to `docker buildx build .`.
 The `buildx` subcommand is injected immediately before the `build` argument, so it should account for any flags before it.
 
+You can specify `DOCKERFILE_MOD_META_PATH` to automatically set the `--metadata-file` option on `docker buildx build`.
+If the command line already has this flag and the env var option is set, files will be written to both places.
+
 One other thing it does is allow you to pass through a custom Dockerfile parser via the `BUILDKIT_SYNTAX` environment variable.
 This is neccessary when the Dockerfile (or the version of buildkit being used) is older and does not support [named build contexts](https://www.docker.com/blog/dockerfiles-now-support-multiple-build-contexts/), which are only supported from version 1.4 of the Dockerfile parser.
 
