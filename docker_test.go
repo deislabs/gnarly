@@ -57,6 +57,11 @@ func TestParseDockerArgs(t *testing.T) {
 		t.Errorf("Got unexpected dockerfile name, expected Dockerfile.test, got: %s", dArgs.DockerfileName)
 	}
 
+	dArgs = parseDockerArgs([]string{"build", "-"})
+	if dArgs.Context != "-" {
+		t.Errorf("Got unexpected context path, expected -, got: %s", dArgs.Context)
+	}
+
 	osArgs := []string{"build", "--build-arg", "foo=bar", "--bool-flag", "--other-flag", "some value", "--build-arg=baz=quux", "--file", t.Name(), "."}
 	dArgs = parseDockerArgs(osArgs)
 

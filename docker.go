@@ -73,7 +73,6 @@ func InvokeDocker() {
 	defer cancel()
 	if err := invokeDocker(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "[dockersource]: Error while wrapping docker cli:", err)
-		fmt.Fprintln(os.Stderr, "[dockersource]: The oepration you are trying to perform may not be supported by this version of dockersource.")
 		os.Exit(1)
 	}
 }
@@ -174,6 +173,11 @@ func parseDockerArgs(args []string) dockerArgs {
 		}
 
 		if arg[0] == '-' {
+			if arg == "-" {
+				// for builds, this means read the context from stdin
+				dArgs.Context = "-"
+				continue
+			}
 			var next string
 			if i < len(args)-1 {
 				next = args[i+1]
