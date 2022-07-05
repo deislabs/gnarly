@@ -30,6 +30,15 @@ COPY --from=alp / /tmp /tmp-alpine
 		},
 	})
 
+	// Work around for non-determinism of metadata file
+	// In order to use the test process must be executed with TEST_ALLOW_ALT_META=1
+	expectedAlt := marshalResult(t, Result{
+		Sources: []Source{
+			{Type: "docker-image", Ref: "docker.io/library/alpine:latest"},
+			{Type: "docker-image", Ref: "docker.io/library/alpine:latest@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"},
+		},
+	})
+
 	extModConfig := []byte(`
 {
 	"docker.io/library/busybox:latest": "docker.io/library/alpine:latest@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"
@@ -47,9 +56,6 @@ COPY --from=alp / /tmp /tmp-alpine
 			t.Run("docker run", testCmd([]byte("hello"), withDockerArgs("run", "--rm", "--tmpfs=/tmp", "--pids-limit", "100", "busybox", "echo", "hello")))
 		})
 		t.Run("build commands", func(t *testing.T) {
-			if os.Getenv("TEST_NO_SKIP_BUILD") != "1" {
-				t.Skip("Build tests are currently buggy to due to non-deterministic output from buildkit's metadata file. Enable these tests by setting TEST_NO_SKIP_BUILD=1")
-			}
 			t.Run("pre-generate", func(t *testing.T) {
 				// pre-generate the mods instead of doing it on the fly when invoking docker.
 				modfilePath := filepath.Join(t.TempDir(), "modfile")
@@ -63,23 +69,23 @@ COPY --from=alp / /tmp /tmp-alpine
 				}
 
 				t.Run("context dir", func(t *testing.T) {
-					t.Run("without buildx", testCmd(expected, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("build")))
-					t.Run("with buildx", testCmd(expected, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("buildx", "build")))
+					t.Run("without buildx", testCmd(expected, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("build"), withAlt(expectedAlt)))
+					t.Run("with buildx", testCmd(expected, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
 				})
 				t.Run("context stdin", func(t *testing.T) {
-					t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("build")))
-					t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("buildx", "build")))
+					t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("build"), withAlt(expectedAlt)))
+					t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
 				})
 			})
 			t.Run("generate", func(t *testing.T) {
 				t.Run("context stdin", func(t *testing.T) {
 					t.Run("external mod", func(t *testing.T) {
-						t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModProg, withModConfig(extModConfig), withDockerArgs("build")))
-						t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModProg, withModConfig(extModConfig), withDockerArgs("buildx", "build")))
+						t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModProg, withModConfig(extModConfig), withDockerArgs("build"), withAlt(expectedAlt)))
+						t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModProg, withModConfig(extModConfig), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
 					})
 					t.Run("builtin mod", func(t *testing.T) {
-						t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModConfig(builtinModCfg), withDockerArgs("build")))
-						t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModConfig(builtinModCfg), withDockerArgs("buildx", "build")))
+						t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModConfig(builtinModCfg), withDockerArgs("build"), withAlt(expectedAlt)))
+						t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModConfig(builtinModCfg), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
 					})
 				})
 			})

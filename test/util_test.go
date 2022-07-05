@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -123,15 +124,22 @@ func withModfile(p string) cmdOpt {
 	}
 }
 
+func withAlt(alt []byte) cmdOpt {
+	return func(t *testing.T, cfg *cmdConfig) {
+		cfg.expectedAlt = alt
+	}
+}
+
 type cmdConfig struct {
-	Format     string
-	AsDocker   bool
-	DockerArgs []string
-	Dockerfile io.Reader
-	Stdin      bool
-	ModProg    string
-	ModConfig  string
-	Modfile    string
+	Format      string
+	AsDocker    bool
+	DockerArgs  []string
+	Dockerfile  io.Reader
+	Stdin       bool
+	ModProg     string
+	ModConfig   string
+	Modfile     string
+	expectedAlt []byte
 }
 
 var openOnce sync.Once
@@ -258,8 +266,24 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 				expected = marshalResult(t, exepctedR)
 			}
 		}
-		if !bytes.Equal(bytes.TrimSpace(out), expected) {
-			t.Fatalf("expected %s, got %s", string(expected), string(out))
+
+		out = bytes.TrimSpace(out)
+		if !bytes.Equal(out, expected) {
+			var allowAlt bool
+			if cfg.expectedAlt != nil {
+				var err error
+				allowAlt, err = strconv.ParseBool(os.Getenv("TEST_ALLOW_ALT_META"))
+				if err != nil {
+					t.Log(err)
+				}
+			}
+			if !allowAlt {
+				t.Fatalf("expected %s, got %s", string(expected), string(out))
+			}
+			if !bytes.Equal(out, cfg.expectedAlt) {
+				t.Errorf("expected %s, got %s", string(expected), string(out))
+				t.Fatalf("expected %s, got %s", string(cfg.expectedAlt), string(out))
+			}
 		}
 	}
 }
