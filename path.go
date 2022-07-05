@@ -29,20 +29,20 @@ func lookPath(name string) string {
 	dir := filepath.Dir(execPath)
 	debug("current bin:", execPath)
 	for _, p := range paths {
-		debug("checking for docker in path:", p)
 		if !noFilterPath && p == dir {
 			// Skip the directory where our binary is located
 			debug("Skipping docker bin lookup for:", p)
 			continue
 		}
 
-		f := filepath.Join(p, dockerBin)
+		f := filepath.Join(p, name)
 		if err := findExecutable(f); err == nil {
-			debug("found docker:", f)
+			debug("found", name+":", f)
 			return f
 		}
 	}
 
+	debug(name, "not found in $PATH:", os.Getenv(pathEnv))
 	return ""
 }
 

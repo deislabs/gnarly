@@ -285,6 +285,8 @@ func invokeDocker(ctx context.Context) error {
 		if err := syscall.Exec(d, append([]string{filepath.Base(d)}, args...), os.Environ()); err != nil {
 			return fmt.Errorf("error executing actual docker bin: %w", err)
 		}
+		// Nothing happens in our code after this.
+		// `syscall.Exec` takes over the whole process
 	}
 
 	cmd := exec.CommandContext(ctx, d, args...)
