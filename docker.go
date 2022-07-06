@@ -35,10 +35,23 @@ var (
 	modPath = os.Getenv("DOCKERFILE_MOD_PATH")
 
 	// Set the path to store the metadata output from docker build
-	metaPath = os.Getenv("DOCKERFILE_MOD_META_PATH")
+	metaPath = os.Getenv("BUILDKIT_METADATA_FILE")
 
 	// Enable debug logging
 	dockerDebug = os.Getenv("DEBUG")
+
+	// Set the output format for `docker buildx build --output`
+	buildOutputFormat = os.Getenv("BUILDKIT_OUTPUT")
+
+	// Bool-like value to add the `--load` flag to `docker buildx build`
+	buildxLoad = os.Getenv("BUILDX_LOAD")
+
+	// Set cache from/to for `docker buildx build`
+	cacheTo   = os.Getenv("BUILDKIT_CACHE_TO")
+	cacheFrom = os.Getenv("BUILDKIT_CACHE_FROM")
+
+	// Set the platform to build
+	buildkitPlatform = os.Getenv("BUILDKIT_PLATFORM")
 )
 
 var (
@@ -217,6 +230,7 @@ func invokeDocker(ctx context.Context) error {
 		if dArgs.Context == "" {
 			return fmt.Errorf("could not find context for build in command line arguments")
 		}
+
 		if dArgs.Build && !dArgs.Buildx {
 			out, err := exec.CommandContext(ctx, d, "build", "--help").CombinedOutput()
 			if err != nil {
@@ -255,17 +269,40 @@ func invokeDocker(ctx context.Context) error {
 				return fmt.Errorf("error parsing specified modfile: %w", err)
 			}
 		} else {
-			if dArgs.Build {
-				dt, err := getDockerfile(dArgs.Context, dArgs.DockerfileName)
-				if err != nil {
-					return err
-				}
-
-				result, err = Generate(ctx, dt, dArgs.BuildArgs)
-				if err != nil {
-					return err
-				}
+			dt, err := getDockerfile(dArgs.Context, dArgs.DockerfileName)
+			if err != nil {
+				return err
 			}
+
+			result, err = Generate(ctx, dt, dArgs.BuildArgs)
+			if err != nil {
+				return err
+			}
+		}
+
+		if buildOutputFormat != "" {
+			args = append(args, "--output", buildOutputFormat)
+		}
+
+		if buildxLoad != "" {
+			load, err := strconv.ParseBool(buildxLoad)
+			if err != nil {
+				debug("error parsing BUILDX_LOAD:", err)
+			}
+			if load {
+				args = append(args, "--load")
+			}
+		}
+
+		if cacheFrom != "" {
+			args = append(args, "--cache-from="+cacheFrom)
+		}
+		if cacheTo != "" {
+			args = append(args, "--cache-to="+cacheTo)
+		}
+
+		if buildkitPlatform != "" {
+			args = append(args, "--platform="+buildkitPlatform)
 		}
 
 		for _, s := range result.Sources {

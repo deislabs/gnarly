@@ -190,7 +190,7 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 
 		metdataFilePath := filepath.Join(t.TempDir(), "metadata.json")
 		if len(cfg.DockerArgs) > 0 || cfg.AsDocker {
-			cmd.Env = append(cmd.Env, "DOCKERFILE_MOD_META_PATH="+metdataFilePath)
+			cmd.Env = append(cmd.Env, "BUILDKIT_METADATA_FILE="+metdataFilePath)
 		}
 
 		if cfg.ModProg != "" {
@@ -272,9 +272,11 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 			var allowAlt bool
 			if cfg.expectedAlt != nil {
 				var err error
-				allowAlt, err = strconv.ParseBool(os.Getenv("TEST_ALLOW_ALT_META"))
-				if err != nil {
-					t.Log(err)
+				if allowAltEnv := os.Getenv("TEST_ALLOW_ALT_META"); allowAltEnv != "" {
+					allowAlt, err = strconv.ParseBool(allowAltEnv)
+					if err != nil {
+						t.Log(err)
+					}
 				}
 			}
 			if !allowAlt {
