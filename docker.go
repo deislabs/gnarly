@@ -423,6 +423,9 @@ func getDockerfile(context, p string) ([]byte, error) {
 		}
 	}
 
+	if p[0] == '/' {
+		return os.ReadFile(p)
+	}
 	if _, err := os.Stat(context); err == nil {
 		return os.ReadFile(filepath.Join(context, p))
 	}
