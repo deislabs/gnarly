@@ -52,6 +52,9 @@ var (
 
 	// Set the platform to build
 	buildkitPlatform = os.Getenv("BUILDKIT_PLATFORM")
+
+	// Replace existing tags with the ones specified in the environment
+	buildkitTag = os.Getenv("BUILDKIT_TAG")
 )
 
 var (
@@ -104,17 +107,24 @@ type dockerArgs struct {
 	Buildx         bool
 	Context        string
 	MetaData       string
+	FilterFlags    []int
+	Tags           []string
 }
 
 func newDockerArgs() dockerArgs {
+	var tags []string
+	if len(buildkitTag) > 0 {
+		tags = strings.Split(buildkitTag, ",")
+	}
 	return dockerArgs{
 		BuildArgs:      make(map[string]string),
 		DockerfileName: "Dockerfile",
+		Tags:           tags,
 	}
 }
 
 // Returns true if next is consumed here and should be skipped when itterating args
-func handleDockerFlag(arg, next string, dArgs *dockerArgs) bool {
+func handleDockerFlag(arg, next string, dArgs *dockerArgs) (handledNext bool, omit bool) {
 	splitArg := strings.SplitN(arg, "=", 2)
 	hasValue := len(splitArg) == 2
 	var value string
@@ -126,7 +136,7 @@ func handleDockerFlag(arg, next string, dArgs *dockerArgs) bool {
 
 	debug(splitArg[0], value)
 	if dArgs.Build {
-		switch splitArg[0] {
+		switch fl := splitArg[0]; fl {
 		case "--build-arg":
 			split := strings.SplitN(value, "=", 2)
 			var v string
@@ -140,6 +150,16 @@ func handleDockerFlag(arg, next string, dArgs *dockerArgs) bool {
 		case "--metadata-file":
 			debug("setting metadata file", arg, value)
 			dArgs.MetaData = value
+		case "-t", "--tag":
+			if len(dArgs.Tags) > 0 {
+				debug("filterting flag", fl, value)
+				omit = true
+			}
+		case "-o", "--output":
+			if len(dArgs.Tags) > 0 && strings.Contains(value, "type=registry") {
+				debug("filtering flag", fl, value)
+				omit = true
+			}
 		}
 	}
 
@@ -147,24 +167,23 @@ func handleDockerFlag(arg, next string, dArgs *dockerArgs) bool {
 		if knownBoolFlags[splitArg[0]] {
 			// We have a known bool flag, check if the next arg is a value passed to the bool flag
 			if isBoolV, _ := strconv.ParseBool(value); isBoolV {
-				return true
+				return true, omit
 			}
 		}
 		if len(value) > 0 && value[0] != '-' {
 			// This is a value for the current option, which we've already captured, so skip it.
-			return true
+			return true, omit
 		}
 	}
 
-	return false
+	return false, omit
 }
 
 // Expects all args that would be passed to dodcker except argv[0] itself.
 // e.g. if argv is "docker build -t foo -f bar", the args would be "build -t foo -f bar"
-func parseDockerArgs(args []string) dockerArgs {
+func parseDockerArgs(args []string, dArgs *dockerArgs) {
 	var (
 		skipNext bool
-		dArgs    = newDockerArgs()
 	)
 
 	for i, arg := range args {
@@ -195,7 +214,14 @@ func parseDockerArgs(args []string) dockerArgs {
 			if i < len(args)-1 {
 				next = args[i+1]
 			}
-			skipNext = handleDockerFlag(arg, next, &dArgs)
+			var omit bool
+			skipNext, omit = handleDockerFlag(arg, next, dArgs)
+			if omit {
+				dArgs.FilterFlags = append(dArgs.FilterFlags, i)
+				if skipNext {
+					dArgs.FilterFlags = append(dArgs.FilterFlags, i+1)
+				}
+			}
 			continue
 		}
 
@@ -206,8 +232,6 @@ func parseDockerArgs(args []string) dockerArgs {
 			dArgs.Context = arg
 		}
 	}
-
-	return dArgs
 }
 
 func invokeDocker(ctx context.Context) error {
@@ -223,12 +247,17 @@ func invokeDocker(ctx context.Context) error {
 		args = os.Args[1:]
 	}
 
-	dArgs := parseDockerArgs(args)
+	dArgs := newDockerArgs()
+	parseDockerArgs(args, &dArgs)
 
 	var metaCopy bool
 	if dArgs.Build {
 		if dArgs.Context == "" {
 			return fmt.Errorf("could not find context for build in command line arguments")
+		}
+
+		for n, i := range dArgs.FilterFlags {
+			args = append(args[:i-n], args[i-n+1:]...)
 		}
 
 		if dArgs.Build && !dArgs.Buildx {
@@ -303,6 +332,11 @@ func invokeDocker(ctx context.Context) error {
 
 		if buildkitPlatform != "" {
 			args = append(args, "--platform="+buildkitPlatform)
+		}
+
+		for _, t := range dArgs.Tags {
+			debug("adding tag:", t)
+			args = append(args, "-t="+t)
 		}
 
 		for _, s := range result.Sources {

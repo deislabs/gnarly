@@ -2,8 +2,6 @@ package test
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -23,20 +21,26 @@ COPY --from=alp / /tmp /tmp-alpine
 	`)
 
 	// This are pinning sha's because the buildkit metadata adds the sha for contexts provided with `--build-context`
-	expected := marshalResult(t, Result{
-		Sources: []Source{
-			{Type: "docker-image", Ref: "docker.io/library/alpine:latest"},
-			{Type: "docker-image", Ref: "docker.io/library/alpine@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"},
+	expected := marshalResult(t, map[string]interface{}{
+		bInfoKey: Result{
+			Sources: []Source{
+				{Type: "docker-image", Ref: "docker.io/library/alpine:latest"},
+				{Type: "docker-image", Ref: "docker.io/library/alpine@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"},
+			},
 		},
+		imageNameKey: "docker.io/library/snowflake:latest,docker.io/library/flurry:latest",
 	})
 
 	// Work around for non-determinism of metadata file
 	// In order to use the test process must be executed with TEST_ALLOW_ALT_META=1
-	expectedAlt := marshalResult(t, Result{
-		Sources: []Source{
-			{Type: "docker-image", Ref: "docker.io/library/alpine:latest"},
-			{Type: "docker-image", Ref: "docker.io/library/alpine:latest@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"},
+	expectedAlt := marshalResult(t, map[string]interface{}{
+		bInfoKey: Result{
+			Sources: []Source{
+				{Type: "docker-image", Ref: "docker.io/library/alpine:latest"},
+				{Type: "docker-image", Ref: "docker.io/library/alpine:latest@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"},
+			},
 		},
+		imageNameKey: "docker.io/library/snowflake:latest,docker.io/library/flurry:latest",
 	})
 
 	extModConfig := []byte(`
@@ -56,36 +60,44 @@ COPY --from=alp / /tmp /tmp-alpine
 			t.Run("docker run", testCmd([]byte("hello"), withDockerArgs("run", "--rm", "--tmpfs=/tmp", "--pids-limit", "100", "busybox", "echo", "hello")))
 		})
 		t.Run("build commands", func(t *testing.T) {
+			createBuildx(t)
+			buildOpts := func(buildx bool) cmdOpt {
+				return func(t *testing.T, cfg *cmdConfig) {
+					withDockerfile(bytes.NewReader(testDockerfile))(t, cfg)
+					args := []string{"build", "-t", "filtered"}
+					if buildx {
+						args = append([]string{"buildx"}, args...)
+					}
+					withDockerArgs(args...)(t, cfg)
+					withAlt(expectedAlt)(t, cfg)
+					withTags("snowflake", "flurry")(t, cfg)
+				}
+			}
 			t.Run("pre-generate", func(t *testing.T) {
-				// pre-generate the mods instead of doing it on the fly when invoking docker.
-				modfilePath := filepath.Join(t.TempDir(), "modfile")
-				modfile := marshalResult(t, Result{
+				modfile := Result{
 					Sources: []Source{
 						{Type: "docker-image", Ref: "docker.io/library/busybox:latest", Replace: "docker.io/library/alpine:latest@sha256:686d8c9dfa6f3ccfc8230bc3178d23f84eeaf7e457f36f271ab1acc53015037c"},
 					},
-				})
-				if err := os.WriteFile(modfilePath, modfile, 0644); err != nil {
-					t.Fatal(err)
 				}
-
+				// pre-generate the mods instead of doing it on the fly when invoking docker.
 				t.Run("context dir", func(t *testing.T) {
-					t.Run("without buildx", testCmd(expected, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("build"), withAlt(expectedAlt)))
-					t.Run("with buildx", testCmd(expected, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
+					t.Run("without buildx", testCmd(expected, buildOpts(false), withModfile(modfile)))
+					t.Run("with buildx", testCmd(expected, buildOpts(true), withModfile(modfile)))
 				})
 				t.Run("context stdin", func(t *testing.T) {
-					t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("build"), withAlt(expectedAlt)))
-					t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModfile(modfilePath), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
+					t.Run("without buildx", testCmd(expected, withStdin, buildOpts(false), withModfile(modfile)))
+					t.Run("with buildx", testCmd(expected, withStdin, buildOpts(true), withModfile(modfile)))
 				})
 			})
 			t.Run("generate", func(t *testing.T) {
 				t.Run("context stdin", func(t *testing.T) {
 					t.Run("external mod", func(t *testing.T) {
-						t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModProg, withModConfig(extModConfig), withDockerArgs("build"), withAlt(expectedAlt)))
-						t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModProg, withModConfig(extModConfig), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
+						t.Run("without buildx", testCmd(expected, withStdin, withModProg, withModConfig(extModConfig), buildOpts(false)))
+						t.Run("with buildx", testCmd(expected, withStdin, withModProg, withModConfig(extModConfig), buildOpts(false)))
 					})
 					t.Run("builtin mod", func(t *testing.T) {
-						t.Run("without buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModConfig(builtinModCfg), withDockerArgs("build"), withAlt(expectedAlt)))
-						t.Run("with buildx", testCmd(expected, withStdin, withDockerfile(bytes.NewReader(testDockerfile)), withModConfig(builtinModCfg), withDockerArgs("buildx", "build"), withAlt(expectedAlt)))
+						t.Run("without buildx", testCmd(expected, withStdin, withModConfig(builtinModCfg), buildOpts(false)))
+						t.Run("with buildx", testCmd(expected, withStdin, withModConfig(builtinModCfg), buildOpts(true)))
 					})
 				})
 			})

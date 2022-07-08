@@ -20,37 +20,69 @@ const (
 	modProg      = "modprog"
 	docker       = "docker"
 	dockersource = "dockersource"
+
+	bInfoKey     = "containerimage.buildinfo"
+	imageNameKey = "image.name"
 )
 
 type Result struct {
 	Sources []Source `json:"sources"`
+	Image   []string `json:"-"`
 }
 
 func unmarshalResult(t *testing.T, b []byte) Result {
-	t.Helper()
-
-	if bytes.Contains(b, []byte("containerimage.buildinfo")) {
-		r := map[string]Result{}
-		if err := json.Unmarshal(b, &r); err != nil {
-			t.Fatal(err)
-		}
-		return r["containerimage.buildinfo"]
-	}
-
-	var r Result
+	r := map[string]json.RawMessage{}
 	if err := json.Unmarshal(b, &r); err != nil {
 		t.Fatal(err)
 	}
-	return r
+	var ret Result
+	if v, ok := r[bInfoKey]; ok {
+		if err := json.Unmarshal(v, &ret); err != nil {
+			t.Fatal(err)
+		}
+
+		var s string
+		if err := json.Unmarshal(r[imageNameKey], &s); err != nil {
+			t.Fatal(err)
+		}
+		ret.Image = strings.Split(s, ",")
+		return ret
+	}
+
+	if err := json.Unmarshal(b, &ret); err != nil {
+		t.Fatal(err)
+	}
+	return ret
 }
 
-func marshalResult(t *testing.T, r Result) []byte {
+func marshalResult(t *testing.T, val interface{}) []byte {
 	t.Helper()
 
-	sort.Slice(r.Sources, func(i, j int) bool {
-		return r.Sources[i].Ref < r.Sources[j].Ref
-	})
-	b, err := json.MarshalIndent(r, "", "\t")
+	switch v := val.(type) {
+	case Result:
+		sort.Slice(v.Sources, func(i, j int) bool {
+			return v.Sources[i].Ref < v.Sources[j].Ref
+		})
+		val = v
+		if len(v.Image) > 0 {
+			val = map[string]interface{}{
+				bInfoKey:     v,
+				imageNameKey: strings.Join(v.Image, ","),
+			}
+		}
+	case map[string]interface{}:
+		vv, ok := v[bInfoKey]
+		if ok {
+			vr := vv.(Result)
+			sort.Slice(vr.Sources, func(i, j int) bool {
+				return vr.Sources[i].Ref < vr.Sources[j].Ref
+			})
+			v[bInfoKey] = vr
+		}
+		val = v
+	}
+
+	b, err := json.MarshalIndent(val, "", "\t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +150,18 @@ func withDockerArgs(args ...string) cmdOpt {
 	}
 }
 
-func withModfile(p string) cmdOpt {
+func withTags(tags ...string) cmdOpt {
 	return func(t *testing.T, cfg *cmdConfig) {
+		cfg.Tags = append(cfg.Tags, tags...)
+	}
+}
+
+func withModfile(r Result) cmdOpt {
+	return func(t *testing.T, cfg *cmdConfig) {
+		p := filepath.Join(t.TempDir(), "modfile")
+		if err := os.WriteFile(p, marshalResult(t, r), 0600); err != nil {
+			t.Fatal(err)
+		}
 		cfg.Modfile = p
 	}
 }
@@ -140,6 +182,7 @@ type cmdConfig struct {
 	ModConfig   string
 	Modfile     string
 	expectedAlt []byte
+	Tags        []string
 }
 
 var openOnce sync.Once
@@ -175,6 +218,11 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, "DEBUG=1")
 
+		if len(cfg.Tags) > 0 {
+			tags := "BUILDKIT_TAG=" + strings.Join(cfg.Tags, ",")
+			cmd.Env = append(cmd.Env, tags)
+		}
+
 		if len(cfg.DockerArgs) > 0 {
 			if !cfg.AsDocker {
 				cmd.Env = append(cmd.Env, "DOCKERFILE_MOD_INVOKE_DOCKER=1")
@@ -207,6 +255,9 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 		}
 
 		if cfg.Dockerfile != nil {
+			if len(cfg.DockerArgs) > 0 {
+				cmd.Args = append(cmd.Args, "--output=type=docker,dest="+filepath.Join(t.TempDir(), "img.tar"))
+			}
 			if cfg.Stdin {
 				cmd.Stdin = cfg.Dockerfile
 				if cfg.AsDocker || len(cfg.DockerArgs) > 0 {
@@ -288,4 +339,24 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 			}
 		}
 	}
+}
+
+func createBuildx(t *testing.T) {
+	builderName := strings.ToLower(strings.Replace(t.Name(), "/", "_", -1))
+	out, err := exec.Command(docker, "buildx", "create", "--name", builderName).CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	t.Cleanup(func() {
+		out, err := exec.Command("docker", "buildx", "rm", builderName).CombinedOutput()
+		if err != nil {
+			t.Log(string(out))
+		}
+	})
+
+	out, err = exec.Command(docker, "buildx", "inspect", "--bootstrap", builderName).CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	t.Setenv("BUILDX_BUILDER", builderName)
 }
