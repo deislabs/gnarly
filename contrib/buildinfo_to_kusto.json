@@ -1,0 +1,62 @@
+[
+    {
+        "column": "containerimage.buildinfo_frontend",
+        "Properties": {
+            "Path": "$['containerimage.buildinfo']['frontend']"
+        }
+    },
+    {
+        "column": "containerimage.buildinfo_attrs",
+        "Properties": {
+            "Path": "$['containerimage.buildinfo']['attrs']"
+        }
+    },
+    {
+        "column": "containerimage.buildinfo_sources",
+        "Properties": {
+            "Path": "$['containerimage.buildinfo']['sources']"
+        }
+    },
+    {
+        "column": "containerimage.config.digest",
+        "Properties": {
+            "Path": "$['containerimage.config.digest']"
+        }
+    },
+    {
+        "column": "containerimage.descriptor_mediaType",
+        "Properties": {
+            "Path": "$['containerimage.descriptor']['mediaType']"
+        }
+    },
+    {
+        "column": "containerimage.descriptor_digest",
+        "Properties": {
+            "Path": "$['containerimage.descriptor']['digest']"
+        }
+    },
+    {
+        "column": "containerimage.descriptor_size",
+        "Properties": {
+            "Path": "$['containerimage.descriptor']['size']"
+        }
+    },
+    {
+        "column": "containerimage.descriptor_annotations",
+        "Properties": {
+            "Path": "$['containerimage.descriptor']['annotations']"
+        }
+    },
+    {
+        "column": "containerimage.digest",
+        "Properties": {
+            "Path": "$['containerimage.digest']"
+        }
+    },
+    {
+        "column": "image.name",
+        "Properties": {
+            "Path": "$['image.name']"
+        }
+    }
+]
