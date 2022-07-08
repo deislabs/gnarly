@@ -40,9 +40,6 @@ var (
 	// Enable debug logging
 	dockerDebug = os.Getenv("DEBUG")
 
-	// Set the output format for `docker buildx build --output`
-	buildOutputFormat = os.Getenv("BUILDKIT_OUTPUT")
-
 	// Bool-like value to add the `--load` flag to `docker buildx build`
 	buildxLoad = os.Getenv("BUILDX_LOAD")
 
@@ -55,6 +52,14 @@ var (
 
 	// Replace existing tags with the ones specified in the environment
 	buildkitTag = os.Getenv("BUILDKIT_TAG")
+
+	// Replace `--output`with the one specified in this env var
+	// Multiple entries can be split with the `:` character
+	// "Real" `:` charactters that should be part of the output spec can be escaped with a `\` character.
+	// We'll also escape this on new lines.
+	//
+	// Note, buildx accepts an array of values for this, but doesn't currently support this: https://github.com/docker/buildx/blob/a8bb25d1b5bd758e293b78d7ef2934a16341b77c/build/build.go#L447
+	buildkitOutput = os.Getenv("BUILDKIT_OUTPUT")
 )
 
 var (
@@ -109,6 +114,7 @@ type dockerArgs struct {
 	MetaData       string
 	FilterFlags    []int
 	Tags           []string
+	Output         []string
 }
 
 func newDockerArgs() dockerArgs {
@@ -116,10 +122,33 @@ func newDockerArgs() dockerArgs {
 	if len(buildkitTag) > 0 {
 		tags = strings.Split(buildkitTag, ",")
 	}
+
+	var output []string
+	if len(buildkitOutput) > 0 {
+		// The format for a normal buildkit output is `key1=value1,key2=value2,...`
+		// In order to support more than one output, we need to split the string.
+		// To do this we'll split on the `separator` character below.
+		// 1. The string may be escaped with a `\`+`separator`, so we'll first replace those escaped values with a null byte.
+		// 2. Split the string on the separator.
+		// 3. Replace the null byte with the separator character (unescaped) in all of the split strings.
+		// 4. Also split on newline characters for convenience.
+		const (
+			separator  = ":"
+			escapeChar = "\\"
+		)
+		escaped := strings.ReplaceAll(buildkitOutput, escapeChar+separator, "\x00")
+		split := strings.Split(escaped, separator)
+		for _, s := range split {
+			ss := strings.ReplaceAll(s, "\x00", escapeChar)
+			output = append(output, strings.Split(ss, "\n")...)
+		}
+	}
+
 	return dockerArgs{
 		BuildArgs:      make(map[string]string),
 		DockerfileName: "Dockerfile",
 		Tags:           tags,
+		Output:         output,
 	}
 }
 
@@ -158,6 +187,10 @@ func handleDockerFlag(arg, next string, dArgs *dockerArgs) (handledNext bool, om
 		case "-o", "--output":
 			if len(dArgs.Tags) > 0 && strings.Contains(value, "type=registry") {
 				debug("filtering flag", fl, value)
+				omit = true
+			}
+			if len(dArgs.Output) > 0 {
+				debug("filterting flag", fl, value)
 				omit = true
 			}
 		}
@@ -309,8 +342,8 @@ func invokeDocker(ctx context.Context) error {
 			}
 		}
 
-		if buildOutputFormat != "" {
-			args = append(args, "--output", buildOutputFormat)
+		for _, o := range dArgs.Output {
+			args = append(args, "--output="+o)
 		}
 
 		if buildxLoad != "" {

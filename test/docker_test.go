@@ -2,6 +2,7 @@ package test
 
 import (
 	"bytes"
+	"path/filepath"
 	"testing"
 )
 
@@ -70,7 +71,8 @@ COPY --from=alp / /tmp /tmp-alpine
 					}
 					withDockerArgs(args...)(t, cfg)
 					withAlt(expectedAlt)(t, cfg)
-					withTags("snowflake", "flurry")(t, cfg)
+					withTags("snowflake", "flurry")(t, cfg)                                       // validates that the buildkit metadata has the tags specified here
+					withOutput("type=docker,dest="+filepath.Join(t.TempDir(), "img.tar"))(t, cfg) // validates that buildkit writes our tar file to this location.
 				}
 			}
 			t.Run("pre-generate", func(t *testing.T) {

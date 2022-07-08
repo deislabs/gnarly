@@ -156,6 +156,12 @@ func withTags(tags ...string) cmdOpt {
 	}
 }
 
+func withOutput(output ...string) cmdOpt {
+	return func(t *testing.T, cfg *cmdConfig) {
+		cfg.Output = append(cfg.Output, output...)
+	}
+}
+
 func withModfile(r Result) cmdOpt {
 	return func(t *testing.T, cfg *cmdConfig) {
 		p := filepath.Join(t.TempDir(), "modfile")
@@ -183,6 +189,7 @@ type cmdConfig struct {
 	Modfile     string
 	expectedAlt []byte
 	Tags        []string
+	Output      []string
 }
 
 var openOnce sync.Once
@@ -253,6 +260,9 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 		if cfg.Modfile != "" {
 			cmd.Env = append(cmd.Env, "DOCKERFILE_MOD_PATH="+cfg.Modfile)
 		}
+		if len(cfg.Output) > 0 {
+			cmd.Env = append(cmd.Env, "BUILDKIT_OUTPUT="+strings.Join(cfg.Output, "\n"))
+		}
 
 		if cfg.Dockerfile != nil {
 			if len(cfg.DockerArgs) > 0 {
@@ -315,6 +325,16 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 
 				exepctedR := unmarshalResult(t, expected)
 				expected = marshalResult(t, exepctedR)
+			}
+		}
+
+		for _, o := range cfg.Output {
+			split := strings.SplitN(o, "dest=", 2)
+			if len(split) > 1 {
+				_, err := os.Stat(strings.SplitN(split[1], ",", 2)[0])
+				if err != nil {
+					t.Errorf("could not stat output file: %v", err)
+				}
 			}
 		}
 
