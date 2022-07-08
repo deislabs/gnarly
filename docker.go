@@ -7,6 +7,8 @@ import (
 	"compress/bzip2"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -60,6 +62,10 @@ var (
 	//
 	// Note, buildx accepts an array of values for this, but doesn't currently support this: https://github.com/docker/buildx/blob/a8bb25d1b5bd758e293b78d7ef2934a16341b77c/build/build.go#L447
 	buildkitOutput = os.Getenv("BUILDKIT_OUTPUT")
+
+	// Directory to store randomly named metadata files for each build
+	// Use this instead of `BUILDKIT_METADATA_FILE` to avoid potentially overwriting files from a previous build invocation
+	buildkitMetadataDir = os.Getenv("BUILDKIT_METADATA_DIR")
 )
 
 var (
@@ -307,6 +313,18 @@ func invokeDocker(ctx context.Context) error {
 			}
 		}
 
+		if buildkitMetadataDir != "" {
+			if metaPath != "" {
+				return fmt.Errorf("conflicting options: both BUILDKIT_METADATA_DIR and BUILDKIT_METADATA_FILE are set but are mutually exclsuive")
+			}
+			if err := os.MkdirAll(buildkitMetadataDir, 0750); err != nil {
+				return fmt.Errorf("failed to create buildkit metadata dir: %v", err)
+			}
+			metaPath = getRandomFilename(buildkitMetadataDir, "metadata-") + ".json"
+			if metaPath == "" {
+				return fmt.Errorf("could not get random filename for buildkit metadata")
+			}
+		}
 		if metaPath != "" {
 			debug("injecting metadata file into args")
 			if dArgs.MetaData != "" && metaPath != dArgs.MetaData {
@@ -566,4 +584,22 @@ func dockerfileFromReader(f io.Reader, p string) ([]byte, error) {
 
 		return ioutil.ReadAll(tr)
 	}
+}
+
+func randomID() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b)
+}
+
+func getRandomFilename(dir, prefix string) string {
+	for i := 0; i < 100; i++ {
+		p := filepath.Join(dir, prefix+randomID())
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return p
+		}
+	}
+	return ""
 }

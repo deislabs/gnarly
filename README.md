@@ -176,6 +176,7 @@ This also supports passing through some environment variables that will be conve
 | BUILDKIT_PLATFORM | Platform spec to build, e.g. `linux/amd64` | `--platform=<spec>` |
 | BUILDX_LOAD | Bool-like value to tell buildx to load the image into Docker | `--load` |
 | BUILDKIT_TAG | CSV list of image tags to override values passed to the docker CLI | `-t=<tag>` |
+| BUILDKIT_METADATA_DIR | Directory to store buildkit metadata file with randomly generated name | `--metadata-file=<dir>/metadata-<random>.json` |
 
 In general this mode is only recommended when you do not have control over the build invocation and as such cannot inject your own build arguments.
 
