@@ -1,4 +1,4 @@
-module github.com/cpuguy83/dockersource
+module github.com/deislabs/gnarly
 
 go 1.18
 
