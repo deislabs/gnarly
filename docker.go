@@ -28,7 +28,7 @@ const (
 	pathEnv   = "PATH"
 )
 
-// Env vars which are used when dockersource is invoked as a wrapper for the docker binary.
+// Env vars which are used when gnarly is invoked as a wrapper for the docker binary.
 var (
 	// Pass through a custom syntax parser to the docker build command.
 	parser = os.Getenv("BUILDKIT_SYNTAX")
@@ -99,14 +99,14 @@ func InvokeDocker() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := invokeDocker(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "[dockersource]: Error while wrapping docker cli:", err)
+		fmt.Fprintln(os.Stderr, "[gnarly]: Error while wrapping docker cli:", err)
 		os.Exit(1)
 	}
 }
 
 func debug(args ...interface{}) {
 	if dockerDebug != "" {
-		fmt.Fprintln(os.Stderr, append([]interface{}{"[dockersource]:"}, args...)...)
+		fmt.Fprintln(os.Stderr, append([]interface{}{"[gnarly]:"}, args...)...)
 	}
 }
 
@@ -266,7 +266,7 @@ func parseDockerArgs(args []string, dArgs *dockerArgs) {
 
 		if dArgs.Build {
 			if dArgs.Context != "" {
-				panic("[dockersource]: found multiple contexts -- this is a bug in the argument parser")
+				panic("[gnarly]: found multiple contexts -- this is a bug in the argument parser")
 			}
 			dArgs.Context = arg
 		}

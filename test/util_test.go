@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	modProg      = "modprog"
-	docker       = "docker"
-	dockersource = "dockersource"
+	modProg = "modprog"
+	docker  = "docker"
+	gnarly  = "gnarly"
 
 	bInfoKey     = "containerimage.buildinfo"
 	imageNameKey = "image.name"
@@ -217,7 +217,7 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 			o(t, &cfg)
 		}
 
-		prog := dockersource
+		prog := gnarly
 		if cfg.AsDocker {
 			prog = docker
 		}
@@ -236,7 +236,7 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 			} else {
 				dir := t.TempDir()
 				p := filepath.Join(dir, docker)
-				if err := os.Symlink(dockersourcePath, p); err != nil {
+				if err := os.Symlink(gnarlyPath, p); err != nil {
 					t.Fatal(err)
 				}
 				t.Setenv("PATH", p+":"+os.Getenv("PATH"))

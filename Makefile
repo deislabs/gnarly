@@ -1,13 +1,13 @@
 TEST_COUNT ?= 1
 TEST ?= go test -count=$(TEST_COUNT) $(TEST_FLAGS) $(if $(V),-v,)
 
-.PHONY: dockersource
-dockersource:
+.PHONY: gnarly
+gnarly:
 	CGO_ENABLED=0 go build $(if $(OUTPUT),-o $(OUTPUT)/$(@),) .
 
 clean:
-	rm dockersource
+	rm gnarly
 
 .PHONY: e2e
-e2e: dockersource
+e2e: gnarly
 	$(TEST) ./test

@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	dockersourcePath string
+	gnarlyPath string
 )
 
 func TestMain(m *testing.M) {
@@ -20,7 +20,7 @@ func TestMain(m *testing.M) {
 		return
 	}
 
-	dir, err := ioutil.TempDir("", "dockersource-test")
+	dir, err := ioutil.TempDir("", "gnarly-test")
 	if err != nil {
 		panic(err)
 	}
@@ -30,16 +30,16 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	cmd := exec.Command("make", dockersource)
+	cmd := exec.Command("make", gnarly)
 	cmd.Dir = filepath.Dir(getwd())
 	cmd.Env = append(os.Environ(), "OUTPUT="+dir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error compiling dockersource bin:", string(out))
+		fmt.Fprintln(os.Stderr, "error compiling gnarly bin:", string(out))
 		os.Exit(1)
 	}
 
-	dockersourcePath = filepath.Join(dir, dockersource)
+	gnarlyPath = filepath.Join(dir, gnarly)
 	os.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 
 	code := m.Run()
@@ -55,7 +55,7 @@ func getwd() string {
 	return dir
 }
 
-// AsModProg allows the current binary to be used as a mod program by dockersource.
+// AsModProg allows the current binary to be used as a mod program by gnarly.
 func AsModProg(t *testing.T) string {
 	dir := t.TempDir()
 

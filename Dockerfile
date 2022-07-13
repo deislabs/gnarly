@@ -17,4 +17,4 @@ RUN \
     GOARM=${TARGETVARIANT#v} CGO_ENABLED=0 go build .
 
 FROM scratch
-COPY --from=build /go/src/github.com/deislabs/gnarly /
+COPY --from=build /go/src/github.com/deislabs/gnarly/gnarly /
