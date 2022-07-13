@@ -2,5 +2,7 @@
 .gitignore
 .git
 Dockerfile
-dockersource
+gnarly
 docker
+contrib/
+bin/

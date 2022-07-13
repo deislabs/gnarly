@@ -1,6 +1,6 @@
 ARG GO_VERSION=1.18
 FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION} AS build
-WORKDIR /go/src/github.com/cpuguy83/dockersource
+WORKDIR /go/src/github.com/deislabs/gnarly
 COPY go.mod .
 COPY go.sum .
 RUN \
@@ -17,4 +17,4 @@ RUN \
     GOARM=${TARGETVARIANT#v} CGO_ENABLED=0 go build .
 
 FROM scratch
-COPY --from=build /go/src/github.com/cpuguy83/dockersource/dockersource /
+COPY --from=build /go/src/github.com/deislabs/gnarly /
