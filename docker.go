@@ -339,7 +339,9 @@ func invokeDocker(ctx context.Context) error {
 		}
 
 		var result Result
-		if modPath != "" {
+		switch {
+		case modPath != "":
+			debug("Reading source replacements from", modPath)
 			data, err := os.ReadFile(modPath)
 			if err != nil {
 				return fmt.Errorf("error reading specified modfile path: %w", err)
@@ -348,7 +350,8 @@ func invokeDocker(ctx context.Context) error {
 			if err := json.Unmarshal(data, &result); err != nil {
 				return fmt.Errorf("error parsing specified modfile: %w", err)
 			}
-		} else {
+		case modConfig != "":
+			debug("Generating source replacements from config", modConfig, "using prog", modProg)
 			dt, err := getDockerfile(dArgs.Context, dArgs.DockerfileName)
 			if err != nil {
 				return err
@@ -358,6 +361,8 @@ func invokeDocker(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+		default:
+			debug("no modfile or modconfig, skipping source analysis")
 		}
 
 		for _, o := range dArgs.Output {
