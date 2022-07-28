@@ -363,9 +363,12 @@ func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 
 func createBuildx(t *testing.T) {
 	builderName := strings.ToLower(strings.Replace(t.Name(), "/", "_", -1))
-	out, err := exec.Command(docker, "buildx", "create", "--name", builderName).CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
+	if _, err := exec.Command(docker, "buildx", "create", "--name", builderName).CombinedOutput(); err != nil {
+		exec.Command(docker, "buildx", "create", "--name", builderName).Run()
+		out, err := exec.Command(docker, "buildx", "create", "--name", builderName).CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
 	}
 	t.Cleanup(func() {
 		out, err := exec.Command("docker", "buildx", "rm", builderName).CombinedOutput()
@@ -374,7 +377,7 @@ func createBuildx(t *testing.T) {
 		}
 	})
 
-	out, err = exec.Command(docker, "buildx", "inspect", "--bootstrap", builderName).CombinedOutput()
+	out, err := exec.Command(docker, "buildx", "inspect", "--bootstrap", builderName).CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
 	}
