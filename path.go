@@ -10,7 +10,12 @@ import (
 func lookPath(name string) string {
 	paths := filepath.SplitList(os.Getenv(pathEnv))
 
-	execPath := os.Args[0]
+	execPath, err := filepath.EvalSymlinks("/proc/self/exe")
+	if err != nil {
+		debug("error evaluating exec path:", err)
+		return ""
+	}
+
 	if !filepath.IsAbs(execPath) {
 		if _, err := os.Stat(execPath); err != nil {
 			if !os.IsNotExist(err) {
@@ -36,6 +41,17 @@ func lookPath(name string) string {
 		}
 
 		f := filepath.Join(p, name)
+
+		f, err = filepath.EvalSymlinks(f)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				debug("error evaluating symlink:", err)
+			}
+			continue
+		}
+		if f == execPath {
+			continue
+		}
 		if err := findExecutable(f); err == nil {
 			debug("found", name+":", f)
 			return f
