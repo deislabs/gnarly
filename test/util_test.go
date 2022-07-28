@@ -209,7 +209,6 @@ func bustCmdCache(t *testing.T) {
 
 func testCmd(expected []byte, opts ...cmdOpt) func(t *testing.T) {
 	return func(t *testing.T) {
-		t.Parallel()
 		bustCmdCache(t)
 
 		var cfg cmdConfig
