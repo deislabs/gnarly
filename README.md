@@ -166,6 +166,8 @@ The `buildx` subcommand is injected immediately before the `build` argument, so 
 
 This also supports passing through some environment variables that will be converted to flags passed to `docker buildx build`.
 
+#### Supported env vars
+
 | var name | description | flag output |
 |----------|-------------|-------------|
 | BUILDKIT_METADATA_FILE | Path to output build metadata to | `--metadata-file=<path>` |
