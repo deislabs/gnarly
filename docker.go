@@ -299,7 +299,7 @@ func invokeDocker(ctx context.Context) error {
 			args = append(args[:i-n], args[i-n+1:]...)
 		}
 
-		if dArgs.Build && !dArgs.Buildx {
+		if !dArgs.Buildx {
 			out, err := exec.CommandContext(ctx, d, "build", "--help").CombinedOutput()
 			if err != nil {
 				debug("error while checking if `docker build` supports --build-context:", err, ":", string(out))
@@ -310,6 +310,11 @@ func invokeDocker(ctx context.Context) error {
 			if !strings.Contains(string(out), "--build-context") {
 				debug("injecting buildx into args")
 				args = append(args[:dArgs.BuildPos], append([]string{"buildx"}, args[dArgs.BuildPos:]...)...)
+			}
+
+			// unless otherwise specified, assume we want to use `--load` when upgrading from `docker build` to `docker buildx build`
+			if buildxLoad == "" {
+				buildxLoad = "true"
 			}
 		}
 
