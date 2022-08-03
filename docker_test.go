@@ -119,4 +119,10 @@ func TestParseDockerArgs(t *testing.T) {
 	if dArgs.FilterFlags[2] != 7 {
 		t.Errorf("Expected 6, got %d", dArgs.FilterFlags[2])
 	}
+
+	dArgs = newDockerArgs()
+	parseDockerArgs([]string{"run", "-it", "--rm", "golang:1.18", "go", "build"}, &dArgs)
+	if dArgs.Build {
+		t.Error("Expected `build` to be false since it is a not a docker build command")
+	}
 }

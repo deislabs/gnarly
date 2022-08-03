@@ -222,7 +222,13 @@ func handleDockerFlag(arg, next string, dArgs *dockerArgs) (handledNext bool, om
 // e.g. if argv is "docker build -t foo -f bar", the args would be "build -t foo -f bar"
 func parseDockerArgs(args []string, dArgs *dockerArgs) {
 	var (
-		skipNext bool
+		skipNext   bool
+		subCommand string
+	)
+
+	const (
+		buildx = "buildx"
+		build  = "build"
 	)
 
 	for i, arg := range args {
@@ -230,15 +236,24 @@ func parseDockerArgs(args []string, dArgs *dockerArgs) {
 			skipNext = false
 			continue
 		}
+
 		switch arg {
-		case "build":
-			dArgs.Build = true
-			dArgs.BuildPos = i
+		case build:
+			if subCommand == "" {
+				subCommand = build
+			}
+			if subCommand == buildx || subCommand == build {
+				dArgs.Build = true
+				dArgs.BuildPos = i
+			}
 			continue
-		case "buildx":
+		case buildx:
 			// `buildx` must come before `build` to be considered
-			if !dArgs.Build {
-				dArgs.Buildx = true
+			if subCommand == "" {
+				if !dArgs.Build {
+					dArgs.Buildx = true
+				}
+				subCommand = buildx
 			}
 			continue
 		}
@@ -263,6 +278,8 @@ func parseDockerArgs(args []string, dArgs *dockerArgs) {
 			}
 			continue
 		}
+
+		subCommand = arg
 
 		if dArgs.Build {
 			if dArgs.Context != "" {
